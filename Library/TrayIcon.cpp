@@ -481,7 +481,7 @@ void TrayIcon::ReadOptions(ConfigParser& parser)
 
 LRESULT CALLBACK TrayIcon::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (CafeLock::IsLocked() && (uMsg == WM_COMMAND || uMsg == WM_TRAY_NOTIFYICON)) return 0;
+	if (CafeLock::IsLocked() && (uMsg == WM_COMMAND || uMsg == WM_TRAY_NOTIFYICON || uMsg == WM_CLOSE)) return 0;
 
 	TrayIcon* tray = GetRainmeter().GetTrayIcon();
 

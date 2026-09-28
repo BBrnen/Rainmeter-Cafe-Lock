@@ -5,6 +5,8 @@ $root = Join-Path $env:RUNNER_TEMP ('CafeLock-' + [guid]::NewGuid())
 $skins = Join-Path $root 'Skins'
 $fixture = Join-Path $skins 'LockTest'
 New-Item -ItemType Directory -Path $fixture -Force | Out-Null
+New-Item -ItemType Directory -Path "$root/Layouts/Replacement" -Force | Out-Null
+"[Rainmeter]`nSkinPath=$skins\`n" | Set-Content "$root/Layouts/Replacement/Rainmeter.ini"
 $ini = Join-Path $root 'Rainmeter.ini'
 @"
 [Rainmeter]
@@ -14,9 +16,15 @@ DisableAutoUpdate=1
 DisableDragging=0
 TrayIcon=1
 Logging=1
+ConfigEditor=$root\Editor.cmd
 [LockTest]
 Active=1
 WindowX=100
+WindowY=100
+Draggable=1
+[LockPeer]
+Active=1
+WindowX=400
 WindowY=100
 Draggable=1
 "@ | Set-Content $ini
@@ -42,6 +50,7 @@ LeftMouseUpAction=[!CommandMeasure Script "Tab()"]["#CURRENTPATH#Launch.cmd"]
 MouseOverAction=[!CommandMeasure Script "Mark('hover')"]
 MouseLeaveAction=[!CommandMeasure Script "Mark('leave')"]
 '@ | Set-Content (Join-Path $fixture 'Test.ini')
+"[Rainmeter]`nUpdate=1000`n[Label]`nMeter=String`nText=Alternate variant" | Set-Content "$fixture/ZAlternate.ini"
 @'
 function Mark(name)
   local f = assert(io.open(SKIN:GetVariable('CURRENTPATH') .. name .. '.txt', 'w'))
@@ -63,6 +72,8 @@ function Tab()
 end
 '@ | Set-Content (Join-Path $fixture 'Test.lua')
 "@echo off`r`necho ok>`"$fixture\launched.txt`"`r`n" | Set-Content (Join-Path $fixture 'Launch.cmd')
+"@echo off`r`necho opened>`"$root\editor-opened.txt`"`r`n" | Set-Content "$root/Editor.cmd"
+Copy-Item -LiteralPath $fixture -Destination "$skins/LockPeer" -Recurse
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -74,6 +85,13 @@ public static class LockNative {
  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr w);
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+ [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
+ [StructLayout(LayoutKind.Sequential)] struct IconId { public uint Size; public IntPtr Window; public uint Id; public Guid Guid; }
+ [DllImport("shell32.dll")] static extern int Shell_NotifyIconGetRect(ref IconId id, out Rect rect);
+ public static bool HasTrayIcon(IntPtr window) {
+   var id = new IconId {Size=(uint)Marshal.SizeOf(typeof(IconId)),Window=window,Id=100};
+   Rect rect; return Shell_NotifyIconGetRect(ref id,out rect)==0;
+ }
  [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SendMessageTimeout(IntPtr w,uint msg,IntPtr wp,IntPtr lp,uint flags,uint ms,out IntPtr result);
  public static IntPtr Send(IntPtr w,uint msg,long wp,long lp) {
    IntPtr result; if(SendMessageTimeout(w,msg,new IntPtr(wp),new IntPtr(lp),2,2000,out result)==IntPtr.Zero)
@@ -108,6 +126,10 @@ try {
   $title = Join-Path $fixture 'Test.ini'
   Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow', $title) -ne [IntPtr]::Zero } 'skin startup'
   $window = [LockNative]::FindWindow('RainmeterMeterWindow', $title)
+  $peerTitle = Join-Path "$skins/LockPeer" 'Test.ini'
+  Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',$peerTitle) -ne [IntPtr]::Zero } 'peer skin startup'
+  $peer = [LockNative]::FindWindow('RainmeterMeterWindow',$peerTitle)
+  $peerBefore = Position $peer
   $tray = [LockNative]::FindWindow('RainmeterTrayClass', $null)
   $control = [LockNative]::FindWindow('DummyRainWClass', 'Rainmeter control window')
   Wait-For { Test-Path "$fixture/updates.txt" } 'Lua timer updates'
@@ -115,6 +137,7 @@ try {
   foreach ($keys in @(@(), @(0x11), @(0x10), @(0x12), @(0x11,0x12), @(0x11,0x10,0x12))) {
     try {
       foreach ($key in $keys) { [LockNative]::keybd_event($key,0,0,[UIntPtr]::Zero) }
+      foreach ($key in $keys) { Wait-For { [LockNative]::GetAsyncKeyState($key) -lt 0 } 'modifier injection' }
       $hit = [LockNative]::Send($window,0x84,0,(110 -bor (110 -shl 16)))
       if ($hit.ToInt64() -ne 1) { throw 'Locked skin exposed a drag caption' }
       [void][LockNative]::Send($window,0x112,0xF012,0) # direct SC_MOVE bypass
@@ -123,6 +146,7 @@ try {
       [void][LockNative]::Send($window,0x100,0x27,0) # selected/group keyboard move
       [void][LockNative]::Send($window,0x7b,0,-1) # keyboard context menu
       if ((Position $window) -ne $before) { throw 'Skin moved with modifier keys' }
+      if ((Position $peer) -ne $peerBefore) { throw 'Group peer moved with modifier keys' }
     } finally { foreach ($key in $keys) { [LockNative]::keybd_event($key,0,2,[UIntPtr]::Zero) } }
   }
   Wait-For { Test-Path "$fixture/down.txt" } 'left-down action'
@@ -135,7 +159,7 @@ try {
   [void][LockNative]::Send($window,0x2A3,0,0)
   Wait-For { Test-Path "$fixture/leave.txt" } 'mouse-leave action'
   $commands = @('!Manage','!EditSkin LockTest Test.ini','!DeactivateConfig LockTest','!DeactivateConfigGroup LockGroup',
-    '!ToggleConfig LockTest Test.ini','!ActivateConfig LockTest Test.ini','!LoadLayout Missing',
+    '!ToggleConfig LockTest Test.ini','!ActivateConfig LockTest ZAlternate.ini','!LoadLayout Replacement',
     '!Move 400 400 LockTest','!SetWindowPosition 400 400 LockTest','!Draggable 1 LockTest',
     '!DraggableGroup 1 LockGroup','!SkinMenu LockTest','!SkinCustomMenu LockTest','!TrayMenu','!Quit',
     '!RainmeterManage','!Execute [!Manage][!DeactivateConfig LockTest]',
@@ -149,13 +173,17 @@ try {
     [void][LockNative]::Send($tray,0x111,$id,0)
   }
   foreach ($mouse in @(0x202,0x203,0x204,0x205)) { [void][LockNative]::Send($tray,1125,0,$mouse) }
+  foreach ($handle in @($window,$tray,$control)) { [void][LockNative]::Send($handle,0x10,0,0) }
   [LockNative]::Bang($window, '!CommandMeasure Script "Mark(''fence'')"')
   Wait-For { Test-Path "$fixture/fence.txt" } 'command processing after blocked management'
   Start-Sleep -Milliseconds 800
   if (-not [LockNative]::IsWindow($window) -or $process.HasExited) { throw 'Management unloaded the skin or quit' }
+  if (-not [LockNative]::IsWindow($peer)) { throw 'Management unloaded the group peer' }
+  if ([LockNative]::HasTrayIcon($tray)) { throw 'Management tray icon is visible' }
   if ((Position $window) -ne $before) { throw 'Management command moved skin' }
   if ([LockNative]::FindWindow('#32768',$null) -ne [IntPtr]::Zero) { throw 'Context menu opened' }
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Manage dialog opened' }
+  if (Test-Path "$root/editor-opened.txt") { throw 'Edit launched the configured editor' }
   if ((Get-Content $ini -Raw) -match 'CafeLock=0') { throw 'Configuration write was accepted' }
   Write-Output 'PASS: startup; modifier drag/keyboard/menu guards; management via skin/main IPC and tray; clicks; Lua tabs/updates; hover; app launch.'
 } finally {

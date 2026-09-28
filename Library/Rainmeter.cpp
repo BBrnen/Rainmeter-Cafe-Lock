@@ -714,6 +714,8 @@ int Rainmeter::MessagePump()
 
 LRESULT CALLBACK Rainmeter::MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked() && uMsg == WM_CLOSE) return 0;
+
 	switch (uMsg)
 	{
 	case WM_DESTROY:
