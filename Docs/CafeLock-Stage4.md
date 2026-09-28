@@ -76,12 +76,19 @@ cover a forged request from a restricted token, authenticated helper success,
 late-response cancellation, repeat authorization, relock, movement, Manage/Edit,
 configuration writes, activation/unload, and process restart. The CI standard-user
 launcher is a test executable only and is not included in the release directory.
+The ordinary hosted desktop pass covers authenticated maintenance transitions and
+modifier input. The restricted-token pass verifies locked enforcement, standard-user
+app launching, and rejection when its helper starts without elevation. On this
+hosted runner, runas from the synthetic restricted token does not produce an
+elevated helper; the helper exits with code 2 and Rainmeter stays locked. This is
+**not** proof of successful credential-based unlocking from a real standard-user
+account. That remains required manual validation before Stage 4 approval.
 
 End-session tests send Windows' query, cancellation and confirmation messages to
 the test process; they do not reboot or sign out the runner. A hosted runner also
 cannot verify a human-approved/cancelled secure-desktop credential prompt.
 
-Before deployment, validate on a disposable Windows standard-user session:
+Before approving Stage 4, validate on a disposable Windows standard-user session:
 
 1. Cancel the actual UAC prompt: dragging, menus and settings remain locked.
 2. Supply administrator credentials: unlock only the requesting instance. Confirm

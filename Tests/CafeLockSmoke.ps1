@@ -1,4 +1,4 @@
-param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance, [switch]$StandardUser)
+param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance, [switch]$StandardUser, [switch]$ExpectElevationUnavailable)
 $ErrorActionPreference = 'Stop'
 $build = (Resolve-Path $BuildDirectory).Path
 $root = Join-Path $env:RUNNER_TEMP ('CafeLock-' + [guid]::NewGuid())
@@ -194,12 +194,22 @@ try {
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Manage dialog opened' }
   if (Test-Path "$root/editor-opened.txt") { throw 'Edit launched the configured editor' }
   if ((Get-Content $ini -Raw) -match 'CafeLock=0') { throw 'Configuration write was accepted' }
-  Write-Output 'PASS: startup; modifier drag/keyboard/menu guards; management via skin/main IPC and tray; clicks; Lua tabs/updates; hover; app launch.'
+  Write-Output "PASS: locked command/action regression; Lua tabs/updates; hover; app launch. Modifier injection included: $(-not $StandardUser)"
   # No window-message payload can substitute for a live authenticated helper.
   1..5 | ForEach-Object { [void][LockNative]::Send($control,0x113,4092,1) }
   [LockNative]::Bang($control,'!Move 150 150 LockTest')
   Start-Sleep -Milliseconds 300
   if ((Position $window) -ne $before) { throw 'Fake authorization notification unlocked Rainmeter' }
+  if ($ExpectElevationUnavailable) {
+    [void][LockNative]::PostMessage($tray,0x111,[IntPtr]4090,[IntPtr]::Zero)
+    Wait-For {
+      (Get-Content "$root/Rainmeter.log" -Raw) -match 'Helper exited before authorization \(2\)'
+    } 'non-elevated helper refuses authorization on the restricted hosted runner'
+    [LockNative]::Bang($control,'!Move 450 450 LockTest')
+    Start-Sleep -Milliseconds 300
+    if ((Position $window) -ne $before) { throw 'Non-elevated helper unlocked Rainmeter' }
+    Write-Output 'PASS: standard-user Rainmeter and launcher; unavailable elevation fails closed. Real credential-based UAC remains a manual test.'
+  }
   if ($Maintenance) {
     # Hosted runner is already elevated: this covers the real helper handshake,
     # not the human interaction with a UAC secure-desktop credential dialog.

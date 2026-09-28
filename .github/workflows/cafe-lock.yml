@@ -75,7 +75,8 @@ jobs:
           if errorlevel 1 exit /b 1
           pwsh -NoProfile -File Tests\CafeLockSmoke.ps1 -Maintenance
           if errorlevel 1 exit /b 1
-          RunAsStandard.exe "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -File Tests\CafeLockSmoke.ps1 -Maintenance -StandardUser
+          pwsh -NoProfile -Command "Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System | Select-Object EnableLUA,ConsentPromptBehaviorAdmin"
+          RunAsStandard.exe "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -File Tests\CafeLockSmoke.ps1 -StandardUser -ExpectElevationUnavailable
 
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
