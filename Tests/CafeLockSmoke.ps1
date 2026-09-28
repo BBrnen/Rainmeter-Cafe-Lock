@@ -1,4 +1,4 @@
-param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance)
+param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance, [switch]$StandardUser)
 $ErrorActionPreference = 'Stop'
 $build = (Resolve-Path $BuildDirectory).Path
 $root = Join-Path $env:RUNNER_TEMP ('CafeLock-' + [guid]::NewGuid())
@@ -135,7 +135,12 @@ try {
   $control = [LockNative]::FindWindow('DummyRainWClass', 'Rainmeter control window')
   Wait-For { Test-Path "$fixture/updates.txt" } 'Lua timer updates'
   $before = Position $window
-  foreach ($keys in @(@(), @(0x11), @(0x10), @(0x12), @(0x11,0x12), @(0x11,0x10,0x12))) {
+  # A filtered process cannot reliably inject keys into the runner's elevated
+  # foreground console. Run those input checks in the ordinary runner pass;
+  # the standard-user pass independently exercises the real authorization/app tokens.
+  $combinations = @(@(), @(0x11), @(0x10), @(0x12), @(0x11,0x12), @(0x11,0x10,0x12))
+  if ($StandardUser) { $combinations = ,@() }
+  foreach ($keys in $combinations) {
     try {
       foreach ($key in $keys) { [LockNative]::keybd_event($key,0,0,[UIntPtr]::Zero) }
       foreach ($key in $keys) { Wait-For { [LockNative]::GetAsyncKeyState($key) -lt 0 } 'modifier injection' }
@@ -153,7 +158,7 @@ try {
   Wait-For { Test-Path "$fixture/down.txt" } 'left-down action'
   Wait-For { Test-Path "$fixture/tab.txt" } 'Lua tab/meter actions'
   Wait-For { Test-Path "$fixture/launched.txt" } 'ordinary application launch'
-  if ((Get-Content "$fixture/launched.txt" -Raw) -ne 'standard') { throw 'Skin-launched application was elevated' }
+  if ($StandardUser -and (Get-Content "$fixture/launched.txt" -Raw) -ne 'standard') { throw 'Skin-launched application was elevated' }
   [void][LockNative]::SetCursorPos(110,110)
   [void][LockNative]::Send($window,0x200,0,(10 -bor (10 -shl 16)))
   Wait-For { Test-Path "$fixture/hover.txt" } 'hover action'
@@ -209,15 +214,17 @@ try {
     Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero } 'maintenance Manage dialog'
     [LockNative]::Bang($control,'!EditSkin LockTest Test.ini')
     Wait-For { Test-Path "$root/editor-opened.txt" } 'maintenance editor'
-    if ((Get-Content "$root/editor-opened.txt" -Raw) -ne 'standard') { throw 'Maintenance elevated the editor' }
+    if ($StandardUser -and (Get-Content "$root/editor-opened.txt" -Raw) -ne 'standard') { throw 'Maintenance elevated the editor' }
     [LockNative]::Bang($control,"!WriteKeyValue Rainmeter MaintenanceWrite yes `"$ini`"")
     Wait-For { (Get-Content $ini -Raw) -match 'MaintenanceWrite=yes' } 'maintenance configuration write'
+    if (-not $StandardUser) {
     [LockNative]::keybd_event(0x11,0,0,[UIntPtr]::Zero)
     Start-Sleep -Milliseconds 80
     try {
       $hit = [LockNative]::Send($window,0x84,0,(160 -bor (160 -shl 16)))
       if ($hit.ToInt64() -ne 2) { throw 'Maintenance Ctrl-drag was not restored' }
     } finally { [LockNative]::keybd_event(0x11,0,2,[UIntPtr]::Zero) }
+    }
     [void][LockNative]::Send($tray,0x111,4091,0)
     Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -eq [IntPtr]::Zero } 'Lock Now closes Manage'
     [LockNative]::Bang($control,'!Move 350 350 LockTest')
@@ -246,7 +253,7 @@ try {
     [LockNative]::Bang($control,'!Move 450 450 LockTest')
     Start-Sleep -Milliseconds 300
     if ((Position $window) -ne $beforeRestart) { throw 'Restart retained maintenance authorization' }
-    Write-Output 'PASS: real helper unlock; Manage/Edit/write/Ctrl-drag; Lock Now; repeat authorization; Unload/Activate; process restart locked.'
+    Write-Output "PASS: real helper unlock; Manage/Edit/write; Lock Now; repeat authorization; Unload/Activate; process restart locked. Standard-user pass: $StandardUser"
   }
   # Exercise the documented Windows protocol without signing out/rebooting the runner.
   foreach ($reason in @(0,2147483648,1073741824)) {

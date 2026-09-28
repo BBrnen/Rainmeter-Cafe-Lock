@@ -1,6 +1,7 @@
 // Harmless GUI app/editor fixture: records its effective token without a console.
 #include <windows.h>
 #include <string>
+#include <cstring>
 #include <shellapi.h>
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
