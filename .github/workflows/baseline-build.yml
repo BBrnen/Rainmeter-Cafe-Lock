@@ -1,0 +1,66 @@
+name: Validate upstream Windows build
+
+on:
+  push:
+    branches: [stage-2-baseline-build]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline-x64:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Check out source and history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify application source matches official stable release
+        shell: pwsh
+        run: |
+          git diff --exit-code 5a124b6a09e2f7f67f8be9232718c489100e6173 HEAD -- . ':(exclude).github' ':(exclude)Docs/CafeLock.md'
+          if ($LASTEXITCODE -ne 0) { throw 'Application source or build inputs differ from upstream.' }
+
+      - name: Build unmodified Rainmeter x64
+        working-directory: Build
+        shell: cmd
+        run: Build.bat rainmeter-64 4.5.26.3894
+
+      - name: Verify required binaries and x64 architecture
+        shell: pwsh
+        run: |
+          foreach ($name in @('Rainmeter.exe', 'Rainmeter.dll', 'SkinInstaller.exe', 'RestartRainmeter.exe')) {
+            $path = Join-Path 'x64-Release' $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing build output: $path" }
+            $bytes = [IO.File]::ReadAllBytes((Resolve-Path $path))
+            $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+            if ([BitConverter]::ToUInt32($bytes, $peOffset) -ne 0x4550) { throw "Invalid PE file: $path" }
+            if ([BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0x8664) { throw "Not an x64 binary: $path" }
+          }
+          @(
+            'Official baseline: 5a124b6a09e2f7f67f8be9232718c489100e6173'
+            "Build commit: $env:GITHUB_SHA"
+            'Configuration: Release x64; Visual Studio 2022; upstream Build.bat'
+            'Unmodified baseline only. Cafe Lock is not implemented.'
+          ) | Set-Content x64-Release/BASELINE-BUILD.txt
+          Get-ChildItem x64-Release -Recurse -File |
+            Where-Object { $_.FullName -notmatch '[\\/]Obj[\\/]' -and $_.Extension -in '.exe', '.dll' } |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $([IO.Path]::GetRelativePath((Resolve-Path 'x64-Release'), $_.Path))" } |
+            Set-Content x64-Release/SHA256SUMS.txt
+
+      - name: Upload unmodified x64 baseline
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Rainmeter-upstream-4.5.26-x64-baseline
+          path: |
+            x64-Release
+            !x64-Release/Obj
+          if-no-files-found: error
+          retention-days: 30
