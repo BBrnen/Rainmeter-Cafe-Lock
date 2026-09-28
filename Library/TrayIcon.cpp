@@ -110,15 +110,13 @@ void TrayIcon::Initialize()
 
 bool TrayIcon::AddTrayIcon()
 {
-	if (CafeLock::IsLocked()) return false;
-
 	NOTIFYICONDATA tnid = {sizeof(NOTIFYICONDATA)};
 	tnid.hWnd = m_Window;
 	tnid.uID = IDI_RAINMETER;
 	tnid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
 	tnid.uCallbackMessage = WM_TRAY_NOTIFYICON;
 	tnid.hIcon = m_Icon;
-	wcsncpy_s(tnid.szTip, APPNAME, _TRUNCATE);
+	wcsncpy_s(tnid.szTip, CafeLock::IsLocked() ? L"Rainmeter Cafe Lock - Locked" : L"Rainmeter Cafe Lock - Maintenance", _TRUNCATE);
 
 	return (Shell_NotifyIcon(NIM_ADD, &tnid) || GetLastError() != ERROR_TIMEOUT);
 }
@@ -138,8 +136,6 @@ bool TrayIcon::IsTrayIconReady()
 
 void TrayIcon::TryAddTrayIcon()
 {
-	if (CafeLock::IsLocked()) return;
-
 	if (IsTrayIconReady())
 	{
 		ModifyTrayIcon(0);
@@ -162,8 +158,6 @@ void TrayIcon::TryAddTrayIcon()
 
 void TrayIcon::CheckTrayIcon()
 {
-	if (CafeLock::IsLocked()) return;
-
 	if (IsTrayIconReady() || AddTrayIcon())
 	{
 		KillTimer(m_Window, TIMER_ADDTRAYICON);
@@ -199,7 +193,8 @@ void TrayIcon::ModifyTrayIcon(double value)
 	NOTIFYICONDATA tnid = {sizeof(NOTIFYICONDATA)};
 	tnid.hWnd = m_Window;
 	tnid.uID = IDI_RAINMETER;
-	tnid.uFlags = NIF_ICON;
+	tnid.uFlags = NIF_ICON | NIF_TIP;
+	wcsncpy_s(tnid.szTip, CafeLock::IsLocked() ? L"Rainmeter Cafe Lock - Locked" : L"Rainmeter Cafe Lock - Maintenance", _TRUNCATE);
 	tnid.hIcon = m_Icon;
 
 	Shell_NotifyIcon(NIM_MODIFY, &tnid);
@@ -345,7 +340,8 @@ void TrayIcon::ShowInstallUpdateNotification(LPCWSTR newVersion)
 
 void TrayIcon::SetTrayIcon(bool enabled, bool setTemporarily)
 {
-	enabled ? TryAddTrayIcon() : RemoveTrayIcon();
+	// Keep the restricted entry / Lock Now reachable, even with TrayIcon=0.
+	TryAddTrayIcon();
 
 	// The tray icon should only be set if TrayIcon=1 in
 	// Rainmeter.ini, or if there are no skins currently active.
@@ -475,13 +471,23 @@ void TrayIcon::ReadOptions(ConfigParser& parser)
 	}
 	else
 	{
-		RemoveTrayIcon();
+		TryAddTrayIcon(); // Restricted entry / Lock Now must remain reachable.
 	}
 }
 
 LRESULT CALLBACK TrayIcon::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (CafeLock::IsLocked() && (uMsg == WM_COMMAND || uMsg == WM_TRAY_NOTIFYICON || uMsg == WM_CLOSE)) return 0;
+	if (uMsg == WM_COMMAND && wParam == CafeLock::LockCommand) { CafeLock::LockNow(); return 0; }
+	if (uMsg == WM_COMMAND && wParam == CafeLock::MaintenanceCommand) { CafeLock::RequestMaintenance(); return 0; }
+	if (CafeLock::IsLocked())
+	{
+		if (uMsg == WM_TRAY_NOTIFYICON)
+		{
+			if (lParam == WM_RBUTTONUP) CafeLock::ShowLockedTrayMenu(hWnd);
+			return 0;
+		}
+		if (uMsg == WM_COMMAND || uMsg == WM_CLOSE) return 0;
+	}
 
 	TrayIcon* tray = GetRainmeter().GetTrayIcon();
 
@@ -829,11 +835,9 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 	default:
 		if (uMsg == WM_TASKBARCREATED)
 		{
-			if (tray->IsTrayIconEnabled())
-			{
-				tray->RemoveTrayIcon();
-				tray->TryAddTrayIcon();
-			}
+			// Recreate the restricted tray / Lock Now entry after Explorer restarts.
+			tray->RemoveTrayIcon();
+			tray->TryAddTrayIcon();
 		}
 		return DefWindowProc(hWnd, uMsg, wParam, lParam);
 	}

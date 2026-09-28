@@ -172,14 +172,14 @@ try {
     [void][LockNative]::Send($window,0x111,$id,0)
     [void][LockNative]::Send($tray,0x111,$id,0)
   }
-  foreach ($mouse in @(0x202,0x203,0x204,0x205)) { [void][LockNative]::Send($tray,1125,0,$mouse) }
+  foreach ($mouse in @(0x202,0x203,0x204)) { [void][LockNative]::Send($tray,1125,0,$mouse) }
   foreach ($handle in @($window,$tray,$control)) { [void][LockNative]::Send($handle,0x10,0,0) }
   [LockNative]::Bang($window, '!CommandMeasure Script "Mark(''fence'')"')
   Wait-For { Test-Path "$fixture/fence.txt" } 'command processing after blocked management'
   Start-Sleep -Milliseconds 800
   if (-not [LockNative]::IsWindow($window) -or $process.HasExited) { throw 'Management unloaded the skin or quit' }
   if (-not [LockNative]::IsWindow($peer)) { throw 'Management unloaded the group peer' }
-  if ([LockNative]::HasTrayIcon($tray)) { throw 'Management tray icon is visible' }
+  if (-not [LockNative]::HasTrayIcon($tray)) { throw 'Restricted maintenance tray icon is missing' }
   if ((Position $window) -ne $before) { throw 'Management command moved skin' }
   if ([LockNative]::FindWindow('#32768',$null) -ne [IntPtr]::Zero) { throw 'Context menu opened' }
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Manage dialog opened' }

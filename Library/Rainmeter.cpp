@@ -570,6 +570,7 @@ int Rainmeter::Initialize(LPCWSTR iniPath, LPCWSTR layout, bool safeStart)
 
 void Rainmeter::Finalize()
 {
+	CafeLock::Shutdown();
 	KillTimer(m_Window, TIMER_NETSTATS);
 
 	GetGameMode().ForceExit();
@@ -718,6 +719,17 @@ LRESULT CALLBACK Rainmeter::MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 
 	switch (uMsg)
 	{
+	case WM_QUERYENDSESSION:
+		return TRUE; // Cafe Lock must never veto Windows sign-out/restart/shutdown.
+
+	case WM_ENDSESSION:
+		if (wParam)
+		{
+			CafeLock::Shutdown();
+			PostQuitMessage(0);
+		}
+		return 0;
+
 	case WM_DESTROY:
 		PlaySound(nullptr, nullptr, SND_PURGE);  // Stop any sounds. See CommandHandler::ExecuteCommand
 		PostQuitMessage(0);
@@ -742,7 +754,11 @@ LRESULT CALLBACK Rainmeter::MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 		break;
 
 	case WM_TIMER:
-		if (wParam == TIMER_NETSTATS)
+		if (wParam == CafeLock::MaintenanceTimer)
+		{
+			CafeLock::PollMaintenance();
+		}
+		else if (wParam == TIMER_NETSTATS)
 		{
 			MeasureNet::UpdateIFTable();
 			MeasureNet::UpdateStats();

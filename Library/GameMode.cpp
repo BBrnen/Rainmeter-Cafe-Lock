@@ -62,7 +62,7 @@ void GameMode::Initialize()
 
 void GameMode::OnTimerEvent(WPARAM wParam)
 {
-	if (wParam != s_TimerEventID) return;
+	if (CafeLock::IsLocked() || wParam != s_TimerEventID) return;
 
 	bool isFullScreenOrProcessList = false;
 
@@ -176,6 +176,12 @@ void GameMode::ChangeStateManual(bool disable)
 	{
 		EnterGameMode();
 	}
+}
+
+void GameMode::SuspendForCafeLock()
+{
+	StopTimer();
+	ExitGameMode();
 }
 
 void GameMode::ForceExit()

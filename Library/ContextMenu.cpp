@@ -97,6 +97,7 @@ void ContextMenu::ShowMenu(POINT pos, Skin* skin)
 			}
 		}
 
+		InsertMenuW(menu, 0, MF_BYPOSITION | MF_STRING, CafeLock::LockCommand, L"Lock Now");
 		DisplayMenu(pos, menu, skin ? skin->GetWindow() : rainmeter.m_TrayIcon->GetWindow());
 		DestroyMenu(menu);
 

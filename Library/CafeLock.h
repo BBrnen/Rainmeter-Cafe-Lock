@@ -6,9 +6,16 @@
 
 namespace CafeLock
 {
-// Stage 3 deliberately has no unlock setting, bang, or command-line switch.
-// A later stage will authorize maintenance for the current process through UAC.
-inline bool IsLocked() { return true; }
+// Process-local state, authorized only by the elevated helper's Windows token.
+bool IsLocked();
+constexpr UINT MaintenanceCommand = 4090;
+constexpr UINT LockCommand = 4091;
+constexpr UINT_PTR MaintenanceTimer = 4092;
+void RequestMaintenance();
+void PollMaintenance();
+void LockNow();
+void Shutdown();
+void ShowLockedTrayMenu(HWND owner);
 
 inline bool AllowsBang(Bang bang)
 {

@@ -5262,9 +5262,8 @@ LRESULT Skin::OnPowerBroadcast(UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 LRESULT Skin::OnKeyDown(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (CafeLock::IsLocked()) return 0;
-
-	if (m_Selected)
+	// Only Rainmeter selection/arrow movement is restricted; input plugins use their own windows.
+	if (m_Selected && !CafeLock::IsLocked())
 	{
 		int newX = 0;
 		int newY = 0;
