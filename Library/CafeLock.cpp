@@ -9,6 +9,7 @@
 #include "DialogNewSkin.h"
 #include "DialogAbout.h"
 #include "GameMode.h"
+#include "Logger.h"
 
 namespace
 {
@@ -30,17 +31,25 @@ void CafeLock::RequestMaintenance()
 		if (!SetTimer(GetRainmeter().GetWindow(), MaintenanceTimer, 100, nullptr)) authorization.Lock();
 	}
 	// UAC cancellation and launch failure leave the instance locked.
+	if (!started && authorization.FailureCode() != ERROR_CANCELLED)
+		LogWarningF(L"Cafe Maintenance: %s (%lu); remaining locked.", authorization.Failure(), authorization.FailureCode());
 }
 
 void CafeLock::PollMaintenance()
 {
 	if (requesting) return;
+	const bool wasPending = authorization.IsPending();
 	if (authorization.Poll())
 	{
 		GetGameMode().Initialize();
 		GetRainmeter().GetTrayIcon()->SetTrayIcon(true, true);
 	}
-	if (!authorization.IsPending()) KillTimer(GetRainmeter().GetWindow(), MaintenanceTimer);
+	if (!authorization.IsPending())
+	{
+		KillTimer(GetRainmeter().GetWindow(), MaintenanceTimer);
+		if (wasPending && IsLocked())
+			LogWarningF(L"Cafe Maintenance: %s (%lu); remaining locked.", authorization.Failure(), authorization.FailureCode());
+	}
 }
 
 void CafeLock::LockNow()
@@ -57,7 +66,7 @@ void CafeLock::LockNow()
 	for (const auto& item : GetRainmeter().GetAllSkins())
 	{
 		SendMessage(item.second->GetWindow(), WM_CANCELMODE, 0, 0);
-		item.second->Deselect();
+		if (item.second->IsSelected()) item.second->Deselect();
 	}
 	GetRainmeter().GetTrayIcon()->SetTrayIcon(true, true);
 }

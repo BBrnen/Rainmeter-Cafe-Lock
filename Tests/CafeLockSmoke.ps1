@@ -240,6 +240,8 @@ try {
       [LockNative]::Bang($control,'!Move 160 160 LockTest')
       (Position $window) -eq '160,160'
     } 'second maintenance authorization'
+    $restoredHit = [LockNative]::Send($window,0x84,0,(170 -bor (170 -shl 16)))
+    if ($restoredHit.ToInt64() -ne 2) { throw 'Relock overwrote the saved draggable preference' }
     [LockNative]::Bang($control,'!DeactivateConfig LockPeer')
     Wait-For { -not [LockNative]::IsWindow($peer) } 'maintenance unload'
     [LockNative]::Bang($control,'!ActivateConfig LockPeer Test.ini')

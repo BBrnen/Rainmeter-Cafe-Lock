@@ -43,11 +43,15 @@ public:
 	Authorization& operator=(const Authorization&) = delete;
 	bool IsAuthorized() const { return m_Authorized; }
 	bool IsPending() const { return m_Pipe != INVALID_HANDLE_VALUE; }
+	const WCHAR* Failure() const { return m_Failure; }
+	DWORD FailureCode() const { return m_FailureCode; }
 	void Lock() { m_Authorized = false; Cancel(); }
 
 	bool Begin(HWND owner, const std::wstring& helper)
 	{
 		if (IsPending() || m_Authorized) return false;
+		m_Failure = L"Pipe setup";
+		m_FailureCode = 0;
 		GUID guid;
 		WCHAR text[40];
 		if (FAILED(CoCreateGuid(&guid)) || !StringFromGUID2(guid, text, 40)) return false;
@@ -81,9 +85,16 @@ public:
 		execute.lpFile = helper.c_str();
 		execute.lpParameters = args.c_str();
 		execute.nShow = SW_HIDE;
-		if (!ShellExecuteExW(&execute) || !execute.hProcess) { Cancel(); return false; }
+		if (!ShellExecuteExW(&execute) || !execute.hProcess)
+		{
+			m_Failure = L"UAC helper launch";
+			m_FailureCode = GetLastError();
+			Cancel();
+			return false;
+		}
 		if (!IsPending()) { CloseHandle(execute.hProcess); return false; }
 		m_Helper = execute.hProcess;
+		m_Failure = L"No authenticated response";
 		return true;
 	}
 
@@ -94,7 +105,19 @@ public:
 		DWORD transferred = 0;
 		if (m_Waiting && !GetOverlappedResult(m_Pipe, &m_Overlap, &transferred, FALSE))
 		{
-			if (GetLastError() != ERROR_IO_INCOMPLETE || WaitForSingleObject(m_Helper, 0) != WAIT_TIMEOUT) Cancel();
+			const DWORD ioError = GetLastError();
+			if (WaitForSingleObject(m_Helper, 0) != WAIT_TIMEOUT)
+			{
+				m_Failure = L"Helper exited before authorization";
+				GetExitCodeProcess(m_Helper, &m_FailureCode);
+				Cancel();
+			}
+			else if (ioError != ERROR_IO_INCOMPLETE)
+			{
+				m_Failure = L"Pipe I/O";
+				m_FailureCode = ioError;
+				Cancel();
+			}
 			return false;
 		}
 		m_Waiting = false;
@@ -117,12 +140,19 @@ public:
 			bool valid = transferred == sizeof(m_Request) && m_Request == 1 &&
 				GetNamedPipeClientProcessId(m_Pipe, &peer) && peer == GetProcessId(m_Helper) &&
 				WaitForSingleObject(m_Helper, 0) == WAIT_TIMEOUT;
+			m_Failure = L"Client identity or identification token";
 			if (valid && ImpersonateNamedPipeClient(m_Pipe))
 			{
-				valid = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &token) &&
-					IsElevatedAdministrator(token) &&
-					GetTokenInformation(token, TokenSessionId, &session, sizeof(session), &size) &&
-					ProcessIdToSessionId(GetCurrentProcessId(), &ownSession) && session == ownSession;
+				m_Failure = L"Open identification token";
+				valid = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &token) != FALSE;
+				if (valid)
+				{
+					m_Failure = L"Elevated administrator token and Windows session";
+					valid = IsElevatedAdministrator(token) &&
+						GetTokenInformation(token, TokenSessionId, &session, sizeof(session), &size) &&
+						ProcessIdToSessionId(GetCurrentProcessId(), &ownSession) && session == ownSession;
+				}
+				m_FailureCode = GetLastError();
 				if (token) CloseHandle(token);
 				// Identification-only impersonation never enables privileged operations.
 				if (!RevertToSelf()) TerminateProcess(GetCurrentProcess(), ERROR_ACCESS_DENIED);
@@ -130,6 +160,8 @@ public:
 			else valid = false;
 			if (!valid) { Cancel(); return false; }
 			m_Authorized = true;
+			m_Failure = nullptr;
+			m_FailureCode = 0;
 			// The peer waits for this acknowledgement, keeping its process alive
 			// during token/PID verification. The tiny write is also overlapped.
 			ResetEvent(m_Overlap.hEvent);
@@ -163,6 +195,8 @@ private:
 		m_Helper = nullptr;
 		m_Waiting = false;
 	}
+	const WCHAR* m_Failure = nullptr;
+	DWORD m_FailureCode = 0;
 	bool m_Authorized = false;
 	bool m_Waiting = false;
 	HANDLE m_Pipe = INVALID_HANDLE_VALUE;
