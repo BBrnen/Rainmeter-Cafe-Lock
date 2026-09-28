@@ -1,4 +1,4 @@
-param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release")
+param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance)
 $ErrorActionPreference = 'Stop'
 $build = (Resolve-Path $BuildDirectory).Path
 $root = Join-Path $env:RUNNER_TEMP ('CafeLock-' + [guid]::NewGuid())
@@ -83,6 +83,7 @@ public static class LockNative {
  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr w, out Rect r);
  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr w);
+ [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr w,uint msg,IntPtr wp,IntPtr lp);
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
  [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
@@ -186,6 +187,72 @@ try {
   if (Test-Path "$root/editor-opened.txt") { throw 'Edit launched the configured editor' }
   if ((Get-Content $ini -Raw) -match 'CafeLock=0') { throw 'Configuration write was accepted' }
   Write-Output 'PASS: startup; modifier drag/keyboard/menu guards; management via skin/main IPC and tray; clicks; Lua tabs/updates; hover; app launch.'
+  # No window-message payload can substitute for a live authenticated helper.
+  1..5 | ForEach-Object { [void][LockNative]::Send($control,0x113,4092,1) }
+  [LockNative]::Bang($control,'!Move 150 150 LockTest')
+  Start-Sleep -Milliseconds 300
+  if ((Position $window) -ne $before) { throw 'Fake authorization notification unlocked Rainmeter' }
+  if ($Maintenance) {
+    # Hosted runner is already elevated: this covers the real helper handshake,
+    # not the human interaction with a UAC secure-desktop credential dialog.
+    [void][LockNative]::PostMessage($tray,0x111,[IntPtr]4090,[IntPtr]::Zero)
+    Wait-For {
+      [LockNative]::Bang($control,'!Move 150 150 LockTest')
+      (Position $window) -eq '150,150'
+    } 'elevated helper authorizes maintenance and movement resumes'
+    [LockNative]::Bang($control,'!Manage')
+    Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero } 'maintenance Manage dialog'
+    [LockNative]::Bang($control,'!EditSkin LockTest Test.ini')
+    Wait-For { Test-Path "$root/editor-opened.txt" } 'maintenance editor'
+    [LockNative]::Bang($control,"!WriteKeyValue Rainmeter MaintenanceWrite yes `"$ini`"")
+    Wait-For { (Get-Content $ini -Raw) -match 'MaintenanceWrite=yes' } 'maintenance configuration write'
+    [LockNative]::keybd_event(0x11,0,0,[UIntPtr]::Zero)
+    try {
+      $hit = [LockNative]::Send($window,0x84,0,(160 -bor (160 -shl 16)))
+      if ($hit.ToInt64() -ne 2) { throw 'Maintenance Ctrl-drag was not restored' }
+    } finally { [LockNative]::keybd_event(0x11,0,2,[UIntPtr]::Zero) }
+    [void][LockNative]::Send($tray,0x111,4091,0)
+    Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -eq [IntPtr]::Zero } 'Lock Now closes Manage'
+    [LockNative]::Bang($control,'!Move 350 350 LockTest')
+    [LockNative]::Bang($control,"!WriteKeyValue Rainmeter AfterLock forbidden `"$ini`"")
+    Start-Sleep -Milliseconds 300
+    if ((Position $window) -ne '150,150') { throw 'Lock Now failed to block movement' }
+    if ((Get-Content $ini -Raw) -match 'AfterLock=forbidden') { throw 'Lock Now failed to block writes' }
+    # Repeated approval, unload/activate, then restart from maintenance.
+    [void][LockNative]::PostMessage($tray,0x111,[IntPtr]4090,[IntPtr]::Zero)
+    Wait-For {
+      [LockNative]::Bang($control,'!Move 160 160 LockTest')
+      (Position $window) -eq '160,160'
+    } 'second maintenance authorization'
+    [LockNative]::Bang($control,'!DeactivateConfig LockPeer')
+    Wait-For { -not [LockNative]::IsWindow($peer) } 'maintenance unload'
+    [LockNative]::Bang($control,'!ActivateConfig LockPeer Test.ini')
+    Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\LockPeer\Test.ini") -ne [IntPtr]::Zero } 'maintenance activate'
+    [LockNative]::Bang($control,'!Quit')
+    Wait-For { $process.HasExited } 'maintenance normal exit'
+    $process = Start-Process (Join-Path $build 'Rainmeter.exe') -ArgumentList "`"$ini`"" -PassThru
+    Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$fixture\Test.ini") -ne [IntPtr]::Zero } 'restarted skin'
+    $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$fixture\Test.ini")
+    $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
+    $tray = [LockNative]::FindWindow('RainmeterTrayClass',$null)
+    $beforeRestart = Position $window
+    [LockNative]::Bang($control,'!Move 450 450 LockTest')
+    Start-Sleep -Milliseconds 300
+    if ((Position $window) -ne $beforeRestart) { throw 'Restart retained maintenance authorization' }
+    Write-Output 'PASS: real helper unlock; Manage/Edit/write/Ctrl-drag; Lock Now; repeat authorization; Unload/Activate; process restart locked.'
+  }
+  # Exercise the documented Windows protocol without signing out/rebooting the runner.
+  foreach ($reason in @(0,2147483648,1073741824)) {
+    foreach ($handle in @($window,$tray,$control)) {
+      if ([LockNative]::Send($handle,0x11,0,$reason).ToInt64() -ne 1) { throw 'Window vetoed Windows end-session query' }
+      [void][LockNative]::Send($handle,0x16,0,$reason) # cancelled shutdown must keep running
+    }
+  }
+  if ($process.HasExited) { throw 'Cancelled Windows shutdown closed Rainmeter' }
+  [void][LockNative]::Send($control,0x16,1,2147483648)
+  Wait-For { $process.HasExited } 'Windows confirmed sign-out closes locked Rainmeter'
+  Write-Output 'PASS: shutdown/restart/logoff queries accepted; cancelled shutdown preserved session; confirmed logoff exits while locked.'
+
 } finally {
   if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 }

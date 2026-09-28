@@ -65,9 +65,13 @@ jobs:
           if errorlevel 1 exit /b 1
           CafeAuthorization.exe "%CD%\x64-Release\RainmeterCafeMaintenance.exe"
 
-      - name: Exercise running Cafe Lock
-        shell: pwsh
-        run: ./Tests/CafeLockSmoke.ps1
+      - name: Exercise running Cafe Lock as a standard user
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cl /nologo /EHsc /W4 /WX Tests\RunAsStandard.cpp /Fe:RunAsStandard.exe /link Advapi32.lib Shlwapi.lib
+          if errorlevel 1 exit /b 1
+          RunAsStandard.exe "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -File Tests\CafeLockSmoke.ps1 -Maintenance
 
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

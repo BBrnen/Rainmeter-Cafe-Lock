@@ -2,6 +2,7 @@
 #pragma once
 #include <windows.h>
 #include <shellapi.h>
+#include <objbase.h>
 #include <sddl.h>
 #include <string>
 
