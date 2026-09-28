@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "StdAfx.h"
+#include "CafeLock.h"
 #include "Skin.h"
 #include "Rainmeter.h"
 #include "TrayIcon.h"
@@ -436,7 +437,7 @@ void Skin::Refresh(bool init, bool all)
 
 	if (!ReadSkin())
 	{
-		GetRainmeter().DeactivateSkin(this, -1);
+		GetRainmeter().DeactivateSkinInternal(this, -1);
 		return;
 	}
 
@@ -606,6 +607,8 @@ void Skin::MapCoordsToScreen(int& x, int& y, int w, int h)
 */
 void Skin::MoveWindow(int x, int y)
 {
+	if (CafeLock::IsLocked()) return;
+
 	SetWindowPos(m_Window, nullptr, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
 
 	SavePositionIfAppropriate();
@@ -613,6 +616,8 @@ void Skin::MoveWindow(int x, int y)
 
 void Skin::MoveSelectedWindow(int dx, int dy)
 {
+	if (CafeLock::IsLocked()) return;
+
 	SetWindowPos(
 		m_Window,
 		nullptr,
@@ -639,6 +644,8 @@ void Skin::SelectSkinsGroup(std::unordered_set<std::wstring> groups)
 
 void Skin::Select()
 {
+	if (CafeLock::IsLocked()) return;
+
 	m_Selected = true;
 
 	// When a skin is selected, it is implied that the purpose is to
@@ -677,7 +684,7 @@ void Skin::Deselect()
 void Skin::DeselectSkinsIfAppropriate(HWND hwnd)
 {
 	// Do not deselect any skins if CTRL+ALT is pressed
-	if (IsCtrlKeyDown() && IsAltKeyDown()) return;
+	if (!CafeLock::IsLocked() && IsCtrlKeyDown() && IsAltKeyDown()) return;
 
 	// If the window that gets focus is a Rainmeter skin that is
 	// selected, then do not de-select any skins
@@ -800,6 +807,8 @@ void Skin::ChangeSingleZPos(ZPOSITION zPos, bool all)
 */
 void Skin::DoBang(Bang bang, const std::vector<std::wstring>& args)
 {
+	if (!CafeLock::AllowsBang(bang)) return;
+
 	switch (bang)
 	{
 	case Bang::Refresh:
@@ -3911,6 +3920,8 @@ LRESULT Skin::OnMouseHScrollMove(UINT uMsg, WPARAM wParam, LPARAM lParam)
 */
 LRESULT Skin::OnCommand(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked()) return 0;
+
 	switch (wParam)
 	{
 	case IDM_SKIN_EDITSKIN:
@@ -4247,6 +4258,9 @@ void Skin::SetWindowZPosition(ZPOSITION zPos)
 */
 LRESULT Skin::OnSysCommand(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked() && ((wParam & 0xFFF0) == SC_MOVE ||
+		(wParam & 0xFFF0) == SC_SIZE || (wParam & 0xFFF0) == SC_CLOSE)) return 0;
+
 	if ((wParam & 0xFFF0) != SC_MOVE)
 	{
 		return DefWindowProc(m_Window, uMsg, wParam, lParam);
@@ -4572,8 +4586,13 @@ LRESULT Skin::OnLeftButtonDown(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		MapWindowPoints(nullptr, m_Window, &pos, 1);
 	}
 
-	// Handle buttons
+	// Keep ordinary click actions; never delegate to Windows dragging while locked.
 	HandleButtons(pos, BUTTONPROC_DOWN);
+	if (CafeLock::IsLocked())
+	{
+		DoAction(pos.x, pos.y, MOUSE_LMB_DOWN, false);
+		return 0;
+	}
 
 	if (IsCtrlKeyDown() ||  // Ctrl is pressed, so only run default action
 		(!DoAction(pos.x, pos.y, MOUSE_LMB_DOWN, false) && m_WindowDraggable))
@@ -4592,7 +4611,7 @@ LRESULT Skin::OnLeftButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	// Select/Deselect the skin if CTRL+ALT is pressed when the
 	// left mouse button is depressed. (Draws an overlay over the skin.)
-	if (IsCtrlKeyDown() && IsAltKeyDown())
+	if (!CafeLock::IsLocked() && IsCtrlKeyDown() && IsAltKeyDown())
 	{
 		if (!m_Selected)
 		{
@@ -4906,6 +4925,8 @@ LRESULT Skin::OnSetWindowFocus(UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 LRESULT Skin::OnContextMenu(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked()) return 0;
+
 	POINT pos = { 0 };
 	RECT rect = { 0 };
 	GetWindowRect(m_Window, &rect);
@@ -5241,6 +5262,8 @@ LRESULT Skin::OnPowerBroadcast(UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 LRESULT Skin::OnKeyDown(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked()) return 0;
+
 	if (m_Selected)
 	{
 		int newX = 0;
@@ -5286,6 +5309,8 @@ LRESULT Skin::OnMouseActivate(UINT uMsg, WPARAM wParam, LPARAM lParam)
 */
 LRESULT CALLBACK Skin::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked() && uMsg == WM_CLOSE) return 0;
+
 	Skin* skin = (Skin*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
 	BEGIN_MESSAGEPROC

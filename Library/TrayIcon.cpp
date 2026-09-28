@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "StdAfx.h"
+#include "CafeLock.h"
 #include "TrayIcon.h"
 #include "Measure.h"
 #include "resource.h"
@@ -109,6 +110,8 @@ void TrayIcon::Initialize()
 
 bool TrayIcon::AddTrayIcon()
 {
+	if (CafeLock::IsLocked()) return false;
+
 	NOTIFYICONDATA tnid = {sizeof(NOTIFYICONDATA)};
 	tnid.hWnd = m_Window;
 	tnid.uID = IDI_RAINMETER;
@@ -135,6 +138,8 @@ bool TrayIcon::IsTrayIconReady()
 
 void TrayIcon::TryAddTrayIcon()
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (IsTrayIconReady())
 	{
 		ModifyTrayIcon(0);
@@ -157,6 +162,8 @@ void TrayIcon::TryAddTrayIcon()
 
 void TrayIcon::CheckTrayIcon()
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (IsTrayIconReady() || AddTrayIcon())
 	{
 		KillTimer(m_Window, TIMER_ADDTRAYICON);
@@ -297,6 +304,8 @@ HICON TrayIcon::CreateTrayIcon(double value)
 
 void TrayIcon::ShowNotification(TRAY_NOTIFICATION id, const WCHAR* title, const WCHAR* text)
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (m_Notification == TRAY_NOTIFICATION_NONE)
 	{
 		NOTIFYICONDATA nid = {sizeof(NOTIFYICONDATA)};
@@ -472,6 +481,8 @@ void TrayIcon::ReadOptions(ConfigParser& parser)
 
 LRESULT CALLBACK TrayIcon::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (CafeLock::IsLocked() && (uMsg == WM_COMMAND || uMsg == WM_TRAY_NOTIFYICON)) return 0;
+
 	TrayIcon* tray = GetRainmeter().GetTrayIcon();
 
 	// When in non-layout enabled "Game mode", only process

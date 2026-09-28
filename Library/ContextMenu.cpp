@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "StdAfx.h"
+#include "CafeLock.h"
 #include "../Common/MenuTemplate.h"
 #include "../Common/Gfx/Canvas.h"
 #include "ContextMenu.h"
@@ -28,6 +29,8 @@ ContextMenu::ContextMenu() :
 */
 void ContextMenu::ShowMenu(POINT pos, Skin* skin)
 {
+	if (CafeLock::IsLocked()) return;
+
 	static const MenuTemplate s_Menu[] =
 	{
 		MENU_ITEM(IDM_MANAGE, ID_STR_MANAGE),
@@ -230,6 +233,8 @@ void ContextMenu::ShowMenu(POINT pos, Skin* skin)
 
 void ContextMenu::ShowSkinCustomMenu(POINT pos, Skin* skin)
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (m_MenuActive || skin->IsClosing()) return;
 
 	m_MenuActive = true;

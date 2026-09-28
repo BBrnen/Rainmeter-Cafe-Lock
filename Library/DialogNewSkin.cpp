@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "StdAfx.h"
+#include "CafeLock.h"
 #include "../Common/MenuTemplate.h"
 #include "../Common/PathUtil.h"
 #include "Rainmeter.h"
@@ -34,6 +35,8 @@ DialogNewSkin::~DialogNewSkin()
 */
 void DialogNewSkin::Open(int tab)
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (!c_Dialog)
 	{
 		c_Dialog = new DialogNewSkin();

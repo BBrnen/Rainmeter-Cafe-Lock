@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "StdAfx.h"
+#include "CafeLock.h"
 #include "GameMode.h"
 #include "ConfigParser.h"
 #include "DialogAbout.h"
@@ -50,6 +51,8 @@ GameMode& GameMode::GetInstance()
 
 void GameMode::Initialize()
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (GetRainmeter().GetDebug())
 	{
 		LogDebug(L">> Initializing \"Game mode\" (v1)");
@@ -394,6 +397,8 @@ void GameMode::WriteSettings()
 
 void GameMode::EnterGameMode()
 {
+	if (CafeLock::IsLocked()) return;
+
 	if (!IsDisabled()) return;
 
 	LogNotice(L">> Entering \"Game mode\"");

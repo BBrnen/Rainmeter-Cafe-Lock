@@ -14,6 +14,7 @@
 #include <list>
 #include <string>
 #include "CommandHandler.h"
+#include "CafeLock.h"
 #include "ContextMenu.h"
 #include "DialogManage.h"
 #include "Logger.h"
@@ -153,7 +154,7 @@ public:
 	bool GetDisableRDP() { return m_DisableRDP; }
 	bool IsRedrawable() { return (!GetDisableRDP() || !GetSystemMetrics(SM_REMOTESESSION)); }
 
-	bool GetDisableDragging() { return m_DisableDragging; }
+	bool GetDisableDragging() { return CafeLock::IsLocked() || m_DisableDragging; }
 	void SetDisableDragging(bool dragging);
 
 	bool IsNormalStayDesktop() { return m_NormalStayDesktop; }
@@ -196,6 +197,7 @@ public:
 	friend class DialogManage;
 	friend class DialogNewSkin;
 	friend class GameMode;
+	friend class Skin;
 
 private:
 	Rainmeter();
@@ -207,6 +209,8 @@ private:
 	static LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	void ActivateActiveSkins();
+	void ActivateSkinInternal(int folderIndex, int fileIndex);
+	void DeactivateSkinInternal(Skin* skin, int folderIndex, bool save = true);
 	void CreateSkin(const std::wstring& folderPath, const std::wstring& file, bool hasSettings);
 	void DeleteAllSkins();
 	void DeleteAllUnmanagedSkins();

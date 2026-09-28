@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "StdAfx.h"
+#include "CafeLock.h"
 #include "../Common/Gfx/Canvas.h"
 #include "../Common/FileUtil.h"
 #include "../Common/PathUtil.h"
@@ -514,7 +515,7 @@ int Rainmeter::Initialize(LPCWSTR iniPath, LPCWSTR layout, bool safeStart)
 	// Rainmeter safe start
 	// Note: This copies the default illustro skins and layout (if needed) without overwriting any
 	//  changes the user has made to the skins or layout.
-	if (!iniFileCreated && (safeStart || IsCtrlKeyDown()))
+	if (!CafeLock::IsLocked() && !iniFileCreated && (safeStart || IsCtrlKeyDown()))
 	{
 		int result = MessageBox(
 			nullptr,
@@ -559,7 +560,7 @@ int Rainmeter::Initialize(LPCWSTR iniPath, LPCWSTR layout, bool safeStart)
 	{
 		m_TrayIcon->ShowWelcomeNotification();
 	}
-	else if (!m_DisableVersionCheck)
+	else if (!CafeLock::IsLocked() && !m_DisableVersionCheck)
 	{
 		GetUpdater().CheckForUpdates(!m_DisableAutoUpdate);
 	}
@@ -621,6 +622,8 @@ void Rainmeter::Finalize()
 
 void Rainmeter::RestartRainmeter()
 {
+	if (CafeLock::IsLocked()) return;
+
 	// Make sure to call this function after m_Path is initialized in Rainmeter::Initialize
 	std::wstring restart = m_Path;
 	restart += L"RestartRainmeter.exe";
@@ -975,6 +978,8 @@ void Rainmeter::ReloadSettings()
 
 void Rainmeter::EditSettings()
 {
+	if (CafeLock::IsLocked()) return;
+
 	std::wstring file = L'"' + m_IniFile;
 	file += L'"';
 	CommandHandler::RunFile(m_SkinEditor.c_str(), file.c_str());
@@ -982,6 +987,8 @@ void Rainmeter::EditSettings()
 
 void Rainmeter::EditSkinFile(const std::wstring& name, const std::wstring& iniFile)
 {
+	if (CafeLock::IsLocked()) return;
+
 	std::wstring args = L'"' + m_SkinPath;
 	args += name;
 	args += L'\\';
@@ -992,6 +999,8 @@ void Rainmeter::EditSkinFile(const std::wstring& name, const std::wstring& iniFi
 
 void Rainmeter::OpenSkinFolder(const std::wstring& name)
 {
+	if (CafeLock::IsLocked()) return;
+
 	std::wstring folderPath = m_SkinPath + name;
 	CommandHandler::RunFile(folderPath.c_str());
 }
@@ -1071,7 +1080,7 @@ void Rainmeter::ActivateActiveSkins()
 		const SkinRegistry::Folder& skinFolder = m_SkinRegistry.GetFolder((*iter).second);
 		if (skinFolder.active > 0 && skinFolder.active <= (uint16_t)skinFolder.files.size())
 		{
-			ActivateSkin((*iter).second, skinFolder.active - 1);
+			ActivateSkinInternal((*iter).second, skinFolder.active - 1);
 		}
 	}
 }
@@ -1082,6 +1091,8 @@ void Rainmeter::ActivateActiveSkins()
 */
 bool Rainmeter::ActivateSkin(const std::wstring& folderPath)
 {
+	if (CafeLock::IsLocked()) return false;
+
 	const int index = m_SkinRegistry.FindFolderIndex(folderPath);
 	if (index != -1)
 	{
@@ -1105,6 +1116,8 @@ bool Rainmeter::ActivateSkin(const std::wstring& folderPath)
 */
 bool Rainmeter::ActivateSkin(const std::wstring& folderPath, const std::wstring& file)
 {
+	if (CafeLock::IsLocked()) return false;
+
 	const SkinRegistry::Indexes indexes = m_SkinRegistry.FindIndexes(folderPath, file);
 	if (indexes.IsValid())
 	{
@@ -1116,6 +1129,12 @@ bool Rainmeter::ActivateSkin(const std::wstring& folderPath, const std::wstring&
 }
 
 void Rainmeter::ActivateSkin(int folderIndex, int fileIndex)
+{
+	if (CafeLock::IsLocked()) return;
+	ActivateSkinInternal(folderIndex, fileIndex);
+}
+
+void Rainmeter::ActivateSkinInternal(int folderIndex, int fileIndex)
 {
 	if (folderIndex >= 0 && folderIndex < m_SkinRegistry.GetFolderCount() &&
 		fileIndex >= 0 && fileIndex < (int)m_SkinRegistry.GetFolder(folderIndex).files.size())
@@ -1178,6 +1197,13 @@ void Rainmeter::ActivateSkin(int folderIndex, int fileIndex)
 }
 
 void Rainmeter::DeactivateSkin(Skin* skin, int folderIndex, bool save)
+{
+	if (CafeLock::IsLocked()) return;
+	DeactivateSkinInternal(skin, folderIndex, save);
+}
+
+// Internal cleanup must still work for invalid/missing skins and shutdown.
+void Rainmeter::DeactivateSkinInternal(Skin* skin, int folderIndex, bool save)
 {
 	if (folderIndex >= 0 && folderIndex < m_SkinRegistry.GetFolderCount())
 	{
@@ -1779,7 +1805,7 @@ void Rainmeter::RefreshAll()
 					const WCHAR* skinFolderPath = skin->GetFolderPath().c_str();
 					std::wstring error = GetFormattedString(ID_STR_UNABLETOREFRESHSKIN, skinFolderPath, skinIniFile);
 
-					DeactivateSkin(skin, index);
+					DeactivateSkinInternal(skin, index);
 
 					ShowMessage(nullptr, error.c_str(), MB_OK | MB_ICONEXCLAMATION);
 					continue;
@@ -1790,7 +1816,7 @@ void Rainmeter::RefreshAll()
 				const WCHAR* skinFolderPath = skin->GetFolderPath().c_str();
 				std::wstring error = GetFormattedString(ID_STR_UNABLETOREFRESHSKIN, skinFolderPath, L"");
 
-				DeactivateSkin(skin, -2);  // -2 = Force deactivate
+				DeactivateSkinInternal(skin, -2);  // -2 = Force deactivate
 
 				ShowMessage(nullptr, error.c_str(), MB_OK | MB_ICONEXCLAMATION);
 				continue;
@@ -1806,6 +1832,8 @@ void Rainmeter::RefreshAll()
 
 bool Rainmeter::LoadLayout(const std::wstring& name)
 {
+	if (CafeLock::IsLocked()) return false;
+
 	// Replace Rainmeter.ini with layout
 	std::wstring layout = GetLayoutPath();
 	layout += name;
