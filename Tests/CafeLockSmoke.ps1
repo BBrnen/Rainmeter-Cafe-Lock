@@ -186,7 +186,9 @@ try {
   Start-Sleep -Milliseconds 800
   if (-not [LockNative]::IsWindow($window) -or $process.HasExited) { throw 'Management unloaded the skin or quit' }
   if (-not [LockNative]::IsWindow($peer)) { throw 'Management unloaded the group peer' }
-  if (-not [LockNative]::HasTrayIcon($tray)) { throw 'Restricted maintenance tray icon is missing' }
+  # Shell_NotifyIcon IPC to the hosted runner's elevated Explorer is blocked by UIPI
+  # for the filtered token. The desktop pass checks the actual tray icon.
+  if (-not $StandardUser -and -not [LockNative]::HasTrayIcon($tray)) { throw 'Restricted maintenance tray icon is missing' }
   if ((Position $window) -ne $before) { throw 'Management command moved skin' }
   if ([LockNative]::FindWindow('#32768',$null) -ne [IntPtr]::Zero) { throw 'Context menu opened' }
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Manage dialog opened' }
