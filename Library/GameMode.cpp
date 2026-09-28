@@ -181,7 +181,8 @@ void GameMode::ChangeStateManual(bool disable)
 void GameMode::SuspendForCafeLock()
 {
 	StopTimer();
-	ExitGameMode();
+	// Freeze the current scene: no delayed game-mode layout may run after relock.
+	m_State = State::Disabled;
 }
 
 void GameMode::ForceExit()

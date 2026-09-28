@@ -71,6 +71,8 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cl /nologo /EHsc /W4 /WX Tests\RunAsStandard.cpp /Fe:RunAsStandard.exe /link Advapi32.lib Shlwapi.lib
           if errorlevel 1 exit /b 1
+          cl /nologo /EHsc /W4 /WX Tests\CafeLaunchProbe.cpp /Fe:CafeLaunchProbe.exe /link Advapi32.lib /SUBSYSTEM:WINDOWS
+          if errorlevel 1 exit /b 1
           RunAsStandard.exe "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -File Tests\CafeLockSmoke.ps1 -Maintenance
 
       - name: Upload Cafe Lock x64 review build

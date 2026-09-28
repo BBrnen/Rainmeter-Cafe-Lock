@@ -45,7 +45,7 @@ void CafeLock::PollMaintenance()
 
 void CafeLock::LockNow()
 {
-	// Exit any maintenance game mode before locking so its restoration can finish.
+	// Stop automatic game-mode transitions; keep the currently configured scene.
 	if (!IsLocked()) GetGameMode().SuspendForCafeLock();
 	authorization.Lock();
 	KillTimer(GetRainmeter().GetWindow(), MaintenanceTimer);

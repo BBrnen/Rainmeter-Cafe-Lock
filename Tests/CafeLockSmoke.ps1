@@ -16,7 +16,7 @@ DisableAutoUpdate=1
 DisableDragging=0
 TrayIcon=1
 Logging=1
-ConfigEditor=$root\Editor.cmd
+ConfigEditor=$root\Editor.exe
 [LockTest]
 Active=1
 WindowX=100
@@ -46,7 +46,7 @@ W=240
 H=80
 SolidColor=70,70,70,255
 LeftMouseDownAction=[!CommandMeasure Script "Mark('down')"]
-LeftMouseUpAction=[!CommandMeasure Script "Tab()"]["#CURRENTPATH#Launch.cmd"]
+LeftMouseUpAction=[!CommandMeasure Script "Tab()"]["#CURRENTPATH#Launch.exe"]
 MouseOverAction=[!CommandMeasure Script "Mark('hover')"]
 MouseLeaveAction=[!CommandMeasure Script "Mark('leave')"]
 '@ | Set-Content (Join-Path $fixture 'Test.ini')
@@ -71,8 +71,8 @@ function Tab()
   if SKIN:GetVariable('ActiveTab') == '2' then Mark('tab') end
 end
 '@ | Set-Content (Join-Path $fixture 'Test.lua')
-"@echo off`r`necho ok>`"$fixture\launched.txt`"`r`n" | Set-Content (Join-Path $fixture 'Launch.cmd')
-"@echo off`r`necho opened>`"$root\editor-opened.txt`"`r`n" | Set-Content "$root/Editor.cmd"
+Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$fixture/Launch.exe"
+Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$root/Editor.exe"
 Copy-Item -LiteralPath $fixture -Destination "$skins/LockPeer" -Recurse
 Add-Type @'
 using System;
@@ -153,6 +153,7 @@ try {
   Wait-For { Test-Path "$fixture/down.txt" } 'left-down action'
   Wait-For { Test-Path "$fixture/tab.txt" } 'Lua tab/meter actions'
   Wait-For { Test-Path "$fixture/launched.txt" } 'ordinary application launch'
+  if ((Get-Content "$fixture/launched.txt" -Raw) -ne 'standard') { throw 'Skin-launched application was elevated' }
   [void][LockNative]::SetCursorPos(110,110)
   [void][LockNative]::Send($window,0x200,0,(10 -bor (10 -shl 16)))
   Wait-For { Test-Path "$fixture/hover.txt" } 'hover action'
@@ -200,13 +201,19 @@ try {
       [LockNative]::Bang($control,'!Move 150 150 LockTest')
       (Position $window) -eq '150,150'
     } 'elevated helper authorizes maintenance and movement resumes'
+    [void][LockNative]::PostMessage($window,0x7b,[IntPtr]::Zero,[IntPtr](-1))
+    Wait-For { [LockNative]::FindWindow('#32768',$null) -ne [IntPtr]::Zero } 'maintenance context menu'
+    [void][LockNative]::Send($window,0x1f,0,0)
+    Wait-For { [LockNative]::FindWindow('#32768',$null) -eq [IntPtr]::Zero } 'context menu dismissal'
     [LockNative]::Bang($control,'!Manage')
     Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero } 'maintenance Manage dialog'
     [LockNative]::Bang($control,'!EditSkin LockTest Test.ini')
     Wait-For { Test-Path "$root/editor-opened.txt" } 'maintenance editor'
+    if ((Get-Content "$root/editor-opened.txt" -Raw) -ne 'standard') { throw 'Maintenance elevated the editor' }
     [LockNative]::Bang($control,"!WriteKeyValue Rainmeter MaintenanceWrite yes `"$ini`"")
     Wait-For { (Get-Content $ini -Raw) -match 'MaintenanceWrite=yes' } 'maintenance configuration write'
     [LockNative]::keybd_event(0x11,0,0,[UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 80
     try {
       $hit = [LockNative]::Send($window,0x84,0,(160 -bor (160 -shl 16)))
       if ($hit.ToInt64() -ne 2) { throw 'Maintenance Ctrl-drag was not restored' }
@@ -253,6 +260,9 @@ try {
   Wait-For { $process.HasExited } 'Windows confirmed sign-out closes locked Rainmeter'
   Write-Output 'PASS: shutdown/restart/logoff queries accepted; cancelled shutdown preserved session; confirmed logoff exits while locked.'
 
+} catch {
+  Get-ChildItem $root -Filter '*.log' -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName -Tail 50 }
+  throw
 } finally {
   if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 }
