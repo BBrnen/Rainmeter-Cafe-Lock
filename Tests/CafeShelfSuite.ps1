@@ -27,10 +27,10 @@ $appOne = "$root/AppOne/Probe.exe".Replace('\','/')
 $appTwo = "$root/AppTwo/Probe.exe".Replace('\','/')
 @"
 ShelfConfig = {
-  defaultIcon = 'folder.png',
+  defaultIcon = 'file.png',
   tabs = {
-    { name = 'First', items = {{ label = 'First app', action = '$appOne', icon = 'folder.png' }} },
-    { name = 'Second', items = {{ label = 'Second app', action = '$appTwo', icon = 'folder.png' }} }
+    { name = 'First', items = {{ label = 'First app', action = '$appOne', icon = 'file.png' }} },
+    { name = 'Second', items = {{ label = 'Second app', action = '$appTwo', icon = 'file.png' }} }
   }
 }
 "@ | Set-Content "$skins/Shelf Suite/Shelf1/config.lua"
@@ -47,6 +47,7 @@ Active=1
 WindowX=100
 WindowY=100
 Draggable=1
+AlwaysOnTop=2
 [Shelf Suite\Shelf2]
 Active=1
 WindowX=650
@@ -106,9 +107,11 @@ try {
   $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
   Wait-For { (Read-ShelfState) -eq '1|65|First app' } 'initial stock meters'
   $before = Position $window
+  [void][LockNative]::SetCursorPos(155,185)
+  [void][LockNative]::Send($window,0x200,0,(55 -bor (85 -shl 16)))
+  Wait-For { (Read-ShelfState) -eq '1|62|First app' } 'stock hover movement'
   Click-Shelf 55 85
   Assert-StandardLaunch 'AppOne'
-  Wait-For { (Read-ShelfState) -eq '1|62|First app' } 'stock hover movement'
   [void][LockNative]::SetCursorPos(900,700)
   [void][LockNative]::Send($window,0x2A3,0,0)
   Wait-For { (Read-ShelfState) -eq '1|65|First app' } 'stock mouse leave'
