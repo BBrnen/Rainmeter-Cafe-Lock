@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <atomic>
+#include <thread>
 
 using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
@@ -20,14 +22,15 @@ ComPtr<ICoreWebView2> view;
 std::vector<std::wstring> fixtures;
 size_t nextFixture = 0;
 bool syntheticRejected = false;
-bool finished = false;
+std::atomic<bool> finished{false};
+std::thread dragThread;
 int result = 1;
 
 void Fail(const char* message, HRESULT hr = E_FAIL)
 {
 	std::cout << "FAIL " << message << " HRESULT=" << std::hex << hr << std::dec << '\n';
 	finished = true;
-	PostQuitMessage(1);
+	if (window) PostMessageW(window, WM_NULL, 0, 0);
 }
 void Mouse(DWORD flags)
 {
@@ -69,12 +72,10 @@ private:
 	ULONG references = 1;
 };
 
-void StartDrop()
+void RunDrop(const std::wstring& path)
 {
-	if (finished || nextFixture >= fixtures.size()) return;
-	std::cout << "Starting Windows OLE drop " << nextFixture << '\n';
 	ComPtr<IShellItem> item;
-	HRESULT hr = SHCreateItemFromParsingName(fixtures[nextFixture].c_str(), nullptr, IID_PPV_ARGS(&item));
+	HRESULT hr = SHCreateItemFromParsingName(path.c_str(), nullptr, IID_PPV_ARGS(&item));
 	if (FAILED(hr)) { Fail("create real shell item", hr); return; }
 	std::cout << "Shell item ready\n";
 	ComPtr<IDataObject> data;
@@ -99,6 +100,23 @@ void StartDrop()
 	KillTimer(window, 2);
 	Mouse(MOUSEEVENTF_LEFTUP);
 	if (hr != DRAGDROP_S_DROP) Fail("Windows drag did not complete", hr);
+}
+
+void StartDrop()
+{
+	if (finished || nextFixture >= fixtures.size()) return;
+	if (dragThread.joinable()) dragThread.join();
+	const auto path = fixtures[nextFixture];
+	std::cout << "Starting Windows OLE drop " << nextFixture << '\n';
+	// Model an external source (such as Explorer). Running OLE's modal source
+	// loop on the browser UI thread prevents the target callbacks from pumping.
+	dragThread = std::thread([path]()
+	{
+		const auto initialized = OleInitialize(nullptr);
+		if (FAILED(initialized)) { Fail("initialize drag source apartment", initialized); return; }
+		RunDrop(path);
+		OleUninitialize();
+	});
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
@@ -259,6 +277,7 @@ if (typeof chrome.webview.postMessageWithAdditionalObjects !== 'function') {
 		TranslateMessage(&message);
 		DispatchMessageW(&message);
 	}
+	if (dragThread.joinable()) dragThread.join();
 	KillTimer(window, 1);
 	if (controller) controller->Close();
 	view.Reset(); controller.Reset(); environment.Reset();
