@@ -107,14 +107,34 @@ try {
   $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
   Wait-For { (Read-ShelfState) -eq '1|65|First app' } 'initial stock meters'
   $before = Position $window
+  # Preserve each stock action, then observe its result in the same UI callback.
+  # On a hosted desktop WM_MOUSELEAVE can arrive before an external snapshot.
+  # No production action or upstream file is replaced by this instrumentation.
+  $luaRoot = $root.Replace('\','/')
+  $observe = @"
+function CafeObserve(name)
+  local f=assert(io.open('$luaRoot/'..name..'.event','w'));
+  f:write(tostring(SKIN:GetMeter('MeterIcon1'):GetY())); f:close();
+end
+for _, pair in ipairs({{'MouseOverAction','hover'},{'MouseLeaveAction','leave'}}) do
+  local original=SKIN:GetMeter('MeterIcon1'):GetOption(pair[1]);
+  local observer='[!CommandMeasure MeasureEngine '..string.char(34)..'CafeObserve('..string.char(39)..pair[2]..string.char(39)..')'..string.char(34)..']';
+  SKIN:Bang('!SetOption','MeterIcon1',pair[1],original..observer);
+end
+SKIN:Bang('!UpdateMeter','MeterIcon1');
+"@
+  [LockNative]::Bang($window,"!CommandMeasure MeasureEngine `"$($observe.Replace("`n",' ').Replace("`r",' '))`"")
+  [void](Read-ShelfState)
   [void][LockNative]::SetCursorPos(155,185)
   [void][LockNative]::Send($window,0x200,0,(55 -bor (85 -shl 16)))
-  Wait-For { (Read-ShelfState) -eq '1|62|First app' } 'stock hover movement'
+  Wait-For { Test-Path "$root/hover.event" } 'stock hover callback'
+  if ((Get-Content "$root/hover.event" -Raw) -ne '62') { throw 'Stock hover action did not raise the icon' }
   Click-Shelf 55 85
   Assert-StandardLaunch 'AppOne'
   [void][LockNative]::SetCursorPos(900,700)
   [void][LockNative]::Send($window,0x2A3,0,0)
-  Wait-For { (Read-ShelfState) -eq '1|65|First app' } 'stock mouse leave'
+  Wait-For { Test-Path "$root/leave.event" } 'stock mouse-leave callback'
+  if ((Get-Content "$root/leave.event" -Raw) -ne '65') { throw 'Stock leave action did not restore the icon' }
   Click-Shelf 145 25
   Wait-For { (Read-ShelfState) -eq '2|65|Second app' } 'stock tab switch and meter content'
   Click-Shelf 55 85
@@ -151,6 +171,7 @@ try {
 } catch {
   $lastState = Get-ChildItem $root -Filter '*.state' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($lastState) { Write-Output "Last ShelfSuite state: $(Get-Content $lastState.FullName -Raw)" }
+  Get-ChildItem $root -Filter '*.event' -File | ForEach-Object { Write-Output "$($_.Name): $(Get-Content $_.FullName -Raw)" }
   Get-ChildItem $root -Filter '*.log' -File | ForEach-Object { Get-Content $_.FullName -Tail 20 }
   throw
 } finally {

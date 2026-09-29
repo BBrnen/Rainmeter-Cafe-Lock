@@ -19,7 +19,11 @@ build, not a claim that every third-party skin or Windows environment is tested.
 effects, Lua-driven meter changes, and application launches with a standard-user
 token. It also checks blocked movement and context menus while locked, and
 configurator dispatch before unlock, after password setup/unlock, and after
-Lock Now. A temporary HTML association routes real ShellExecute requests to a
+Lock Now. Test-only Lua observers are appended in memory after the original
+hover/leave actions to record the resulting icon positions in the same callback;
+this avoids missing a brief transition on the hosted desktop. The original
+actions still execute, and no ShelfSuite source file is edited.
+A temporary HTML handler routes real ShellExecute requests to a
 harmless recorder instead of opening a browser. A control launch verifies this
 association before the locked-gear assertion. The original association is
 restored in `finally`, and the test refuses to run outside GitHub Actions.
