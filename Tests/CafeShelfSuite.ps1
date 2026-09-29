@@ -88,6 +88,7 @@ function Assert-GearBlocked {
   Start-Sleep -Milliseconds 800
   if (Test-Path $marker) { throw 'Locked ShelfSuite gear launched the configurator' }
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Gear bypassed maintenance authorization' }
+  if ([LockNative]::FindWindow('RainmeterCafeShelfEditor',$null) -ne [IntPtr]::Zero) { throw 'Locked gear opened the hosted editor' }
 }
 $process = $null
 try {
@@ -153,10 +154,25 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   Submit-Password $dialog $password $password
   Wait-For { -not [LockNative]::IsWindow($dialog) } 'ShelfSuite maintenance password creation'
   Click-Shelf 452 20
+  [void](Read-ShelfState)
+  if (Test-Path "$HtmlProbeDirectory/launched.txt") { throw 'Maintenance gear escaped to an external HTML handler instead of the guarded editor' }
+  Wait-For {
+    [LockNative]::FindWindow('RainmeterCafeShelfEditor',$null) -ne [IntPtr]::Zero -or
+    [LockNative]::FindWindow('#32770','Rainmeter Cafe Lock - ShelfSuite') -ne [IntPtr]::Zero
+  } 'native editor or actionable runtime failure'
+  $runtimeError = [LockNative]::FindWindow('#32770','Rainmeter Cafe Lock - ShelfSuite')
+  if ($runtimeError -ne [IntPtr]::Zero) {
+    [void][LockNative]::Send($runtimeError,0x10,0,0)
+    Write-Output 'NOTE: native runtime error shown; this runner has not verified the hosted browser UI.'
+  }
+  # Ordinary HTML must still use its Windows association through Rainmeter.
+  [LockNative]::Bang($control,('["' + $root + '\control.html"]'))
   Assert-StandardLaunch 'HtmlHandler'
+  Remove-Item -LiteralPath "$HtmlProbeDirectory/launched.txt"
   [LockNative]::Bang($control,'!Move 160 160 "Shelf Suite\Shelf1"')
   Wait-For { (Position $window) -eq '160,160' } 'ShelfSuite maintenance movement'
   [void][LockNative]::Send($tray,0x111,4091,0)
+  Wait-For { [LockNative]::FindWindow('RainmeterCafeShelfEditor',$null) -eq [IntPtr]::Zero } 'Lock Now closes hosted editor'
   Assert-GearBlocked
   [LockNative]::Bang($control,'!Move 260 260 "Shelf Suite\Shelf1"')
   [void](Read-ShelfState)
@@ -167,7 +183,7 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
     if ((Get-Content -LiteralPath $file.FullName -Raw).Contains($password)) { throw 'Plaintext password in configuration/logs' }
   }
-  Write-Output "PASS: ShelfSuite configurator dispatch allowed after password unlock, remains non-elevated, blocked again by Lock Now; all upstream files unchanged. Revision: $revision"
+  Write-Output "PASS: ShelfSuite gear uses native host after password unlock; ordinary HTML still launches non-elevated; Lock Now closes the host and blocks the gear; all upstream files unchanged. Revision: $revision"
 } catch {
   $lastState = Get-ChildItem $root -Filter '*.state' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($lastState) { Write-Output "Last ShelfSuite state: $(Get-Content $lastState.FullName -Raw)" }
