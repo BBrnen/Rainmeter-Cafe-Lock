@@ -49,4 +49,4 @@ Ruling: upstream disables C++ exceptions globally. New standalone parser/host mo
 
 Ruling: isolate native origin/resource/lifetime validation into HostPolicy alongside the Windows Host. This lets the real production policy run without a browser, while the separate host tests still must verify actual events and drop handling. Cost: two focused files beyond the initial filename list, with no extra public application interface.
 
-HostPolicy assertions are committed before implementation; RED pending. The first real-drop probe compiled but linking exposed missing Advapi32 dependencies from Microsoft's static loader. Added the required library without suppressing errors; real drop execution remains pending.
+HostPolicy RED observed at 4508e44, run 36639323727 / job 109647582037: 25 host checks, 6 expected assertion failures, while all 49 protocol checks passed. Origin/resource policy implementation follows; GREEN pending. The first real-drop probe compiled but linking exposed missing Advapi32 dependencies from Microsoft's static loader. Added the required library without suppressing errors; real drop execution remains pending.
