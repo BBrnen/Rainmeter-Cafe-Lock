@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'All')]
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'All')]
     [string]$Suite = 'Protocol'
 )
 $ErrorActionPreference = 'Stop'
@@ -9,8 +9,8 @@ $output = Join-Path $repo 'work-package/CafeShelfTests'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
-    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection') } else { @($Suite) }
-    if ($tests -contains 'Selection') {
+    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host') } else { @($Suite) }
+    if ($tests -contains 'Selection' -or $tests -contains 'Host') {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
     }
@@ -21,6 +21,7 @@ try {
             HostPolicy = 'CafeShelfHostPolicy.cpp'
             Controller = 'CafeShelfController.cpp'
             Selection = 'CafeShelfSelection.cpp'
+            Host = 'CafeShelfHostHarness.cpp'
         }[$test]
         $compilerArgs = @(
             '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
@@ -49,6 +50,14 @@ try {
             [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link)
             [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
             $arguments = @($shortcut, $folder)
+        }
+        if ($test -eq 'Host') {
+            $compilerArgs += @(
+                '/MT', "/I$sdk/build/native/include",
+                "$repo/Library/CafeShelf/Host.cpp", "$repo/Library/CafeShelf/Selection.cpp",
+                '/link', "$sdk/build/native/x64/WebView2LoaderStatic.lib",
+                'advapi32.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib', 'shell32.lib', 'shlwapi.lib', 'uuid.lib', 'version.lib'
+            )
         }
         & cl.exe @compilerArgs
         if ($LASTEXITCODE -ne 0) { throw "CafeShelf $test compilation failed" }
