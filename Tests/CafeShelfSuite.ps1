@@ -7,8 +7,10 @@ $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Run this test only on a disposable GitHub Actions Windows runner' }
 $build = (Resolve-Path $BuildDirectory).Path
 $vendor = (Resolve-Path $ShelfSuiteDirectory).Path
-$revision = (& git -C $vendor rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $revision -ne 'd4f186ba0b5c262c7559b80841132f5fd3884f3c') { throw 'Unexpected ShelfSuite revision' }
+# actions/checkout checks the pinned commit out detached. Read its identity
+# without launching a console child from the restricted-token UI test process.
+$revision = (Get-Content "$vendor/.git/HEAD" -Raw).Trim()
+if ($revision -ne 'd4f186ba0b5c262c7559b80841132f5fd3884f3c') { throw 'Unexpected ShelfSuite revision' }
 $root = Join-Path $env:RUNNER_TEMP ('CafeShelfSuite-' + [guid]::NewGuid())
 $skins = Join-Path $root 'Skins'
 New-Item -ItemType Directory $skins | Out-Null
