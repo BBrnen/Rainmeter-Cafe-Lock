@@ -26,9 +26,12 @@ jobs:
           if errorlevel 1 exit /b 1
           pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite Protocol
 
-      - name: Verify pinned editor SDK acquisition
-        shell: pwsh
-        run: ./Build/CafeDependencies/Inspect.ps1
+      - name: Probe real Windows shortcut and folder drops
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfDropProbe.ps1
 
   cafe-lock-x64:
     runs-on: windows-2022

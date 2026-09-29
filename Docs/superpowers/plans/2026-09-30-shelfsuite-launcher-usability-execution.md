@@ -38,3 +38,9 @@ The first test compilation (9a8d9da, run 36637946440) found MSVC C4310 in the in
 Ruling: inspect the actual pinned SDK package on Windows CI before committing its digest. NuGet must verify the package signature before any SDK content is used. The temporary probe is CI-only and will be superseded by the digest-enforcing restore script; a missing or invalid package blocks host integration.
 
 Ruling: upstream disables C++ exceptions globally. New standalone parser/host modules need a per-file exception setting when integrated; do not change global Rainmeter compiler behavior. Verify the same options in core tests and production integration.
+
+## Task 2 dependency evidence and early drop probe
+
+- Run 36638462606 / job 109644780680 verified the Microsoft author signature, NuGet countersignature, SHA-256 and x86/x64 static-loader layout for SDK 1.0.4258.31. The manifest records the observed digest and author certificate fingerprint.
+- Ruling: run an isolated native WebView2/OLE drop feasibility probe before building the production host. It uses Windows shell data objects and actual mouse/drop delivery; a JavaScript-fabricated File must have no usable path. It neither writes ShelfSuite nor launches fixtures. This resolves the real shortcut/folder path uncertainty early; cost is temporary test-only harness code until it is incorporated into production-host tests.
+- The drop probe is not evidence of production host security or UI completion. Those remain pending.
