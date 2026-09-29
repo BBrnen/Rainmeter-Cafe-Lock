@@ -13,3 +13,6 @@ obj
 /Version.h
 x32*
 x64*
+
+/dist/
+/work-package/

@@ -2,9 +2,9 @@ name: Build and test Cafe Lock
 
 on:
   push:
-    branches: [stage-3-cafe-lock, stage-4-maintenance]
+    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer]
   pull_request:
-    branches: [main, stage-2-baseline-build, stage-3-cafe-lock]
+    branches: [main, stage-2-baseline-build, stage-3-cafe-lock, stage-4-maintenance]
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
             'Official baseline: 5a124b6a09e2f7f67f8be9232718c489100e6173'
             "Build commit: $env:GITHUB_SHA"
             'Configuration: Release x64; Visual Studio 2022; upstream Build.bat'
-            'Stage 4 review build: locked on startup; password Maintenance Mode. No installer.'
+            'Stage 5 review build: password Maintenance Mode; dedicated x64 installer.'
           ) | Set-Content x64-Release/CAFE-LOCK-BUILD.txt
           Get-ChildItem x64-Release -Recurse -File |
             Where-Object { $_.FullName -notmatch '[\\/]Obj[\\/]' -and $_.Extension -in '.exe', '.dll' } |
@@ -80,9 +80,28 @@ jobs:
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Rainmeter-Cafe-Lock-stage4-x64
+          name: Rainmeter-Cafe-Lock-stage5-x64
           path: |
             x64-Release
             !x64-Release/Obj
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Install pinned NSIS and package Cafe Lock
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          ./Build/CafeInstaller/Package.ps1
+
+      - name: Test install, standard-user permissions, upgrade and uninstall
+        shell: pwsh
+        run: ./Tests/CafeInstaller.ps1
+
+      - name: Upload installer, matching source and checksums
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Rainmeter-Cafe-Lock-stage5-installer-x64
+          path: dist
           if-no-files-found: error
           retention-days: 30

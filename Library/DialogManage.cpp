@@ -2479,7 +2479,11 @@ void DialogManage::TabSettings::Initialize()
 	BOOL check = !GetRainmeter().GetDisableVersionCheck();
 	Button_SetCheck(GetControl(Id_CheckForUpdatesCheckBox), check);
 	Button_SetCheck(GetControl(Id_AutoInstallCheckBox), !GetRainmeter().GetDisableAutoUpdate());
-	EnableWindow(GetControl(Id_AutoInstallCheckBox), check);
+	Button_SetCheck(GetControl(Id_CheckForUpdatesCheckBox), FALSE);
+	Button_SetCheck(GetControl(Id_AutoInstallCheckBox), FALSE);
+	EnableWindow(GetControl(Id_CheckForUpdatesCheckBox), FALSE);
+	EnableWindow(GetControl(Id_AutoInstallCheckBox), FALSE);
+	SetWindowText(GetControl(Id_CheckForUpdatesCheckBox), L"Updates: use Rainmeter Cafe Lock Setup");
 
 	UpdateDraggableCheckBox();
 	Button_SetCheck(GetControl(Id_LogToFileCheckBox), GetLogger().IsLogToFile());
@@ -2602,7 +2606,11 @@ INT_PTR DialogManage::TabSettings::OnCommand(WPARAM wParam, LPARAM lParam)
 		{
 			BOOL check = GetRainmeter().GetDisableVersionCheck();
 			GetRainmeter().SetDisableVersionCheck(!check);
-			EnableWindow(GetControl(Id_AutoInstallCheckBox), check);
+			Button_SetCheck(GetControl(Id_CheckForUpdatesCheckBox), FALSE);
+	Button_SetCheck(GetControl(Id_AutoInstallCheckBox), FALSE);
+	EnableWindow(GetControl(Id_CheckForUpdatesCheckBox), FALSE);
+	EnableWindow(GetControl(Id_AutoInstallCheckBox), FALSE);
+	SetWindowText(GetControl(Id_CheckForUpdatesCheckBox), L"Updates: use Rainmeter Cafe Lock Setup");
 		}
 		break;
 

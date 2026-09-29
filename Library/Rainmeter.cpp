@@ -219,7 +219,7 @@ int Rainmeter::Initialize(LPCWSTR iniPath, LPCWSTR layout, bool safeStart)
 		// If the ini file doesn't exist in the program folder store it to the %APPDATA% instead so that things work better in Vista/Win7
 		if (_waccess_s(m_IniFile.c_str(), 0) != 0)
 		{
-			m_IniFile = L"%APPDATA%\\Rainmeter\\Rainmeter.ini";
+			m_IniFile = L"%APPDATA%\\Rainmeter Cafe Lock\\Rainmeter.ini";
 			PathUtil::ExpandEnvironmentVariables(m_IniFile);
 			bDefaultIniLocation = true;
 		}
@@ -312,36 +312,7 @@ int Rainmeter::Initialize(LPCWSTR iniPath, LPCWSTR layout, bool safeStart)
 		CreateDataFile();
 	}
 
-	// Install new version
-	if (GetPrivateProfileString(L"Rainmeter", L"InstallerName", L"", buffer, MAX_LINE_LENGTH, m_DataFile.c_str()) != 0)
-	{
-		bool runInstaller = false;
-		const std::wstring installerName = buffer;
-		const std::wstring updatePath = m_SettingsPath + L"Updates\\";
-		const std::wstring fullPath = updatePath + installerName;
-		if (PathFileExists(fullPath.c_str()))
-		{
-			if (GetPrivateProfileString(L"Rainmeter", L"InstallerSha256", L"", buffer, MAX_LINE_LENGTH, m_DataFile.c_str()) != 0)
-			{
-				const std::wstring sha256 = buffer;
-				runInstaller = Updater::VerifyInstaller(updatePath, installerName, sha256, false);
-				WritePrivateProfileString(L"Rainmeter", L"InstallerSha256", nullptr, m_DataFile.c_str());
-			}
-		}
-
-		WritePrivateProfileString(L"Rainmeter", L"InstallerName", nullptr, m_DataFile.c_str());
-		WritePrivateProfileString(L"Rainmeter", L"DeleteInstaller", installerName.c_str(), m_DataFile.c_str());
-
-		if (runInstaller)
-		{
-			const std::wstring isPortable = _wcsicmp(m_Path.c_str(), m_SettingsPath.c_str()) == 0 ? L"1" : L"0";
-			const std::wstring is64Bit = APPBITS == L"64-bit" ? L"64" : L"32";
-			const std::wstring args = L"/S /RESTART=1 /PORTABLE=" + isPortable + L" /VERSION=" + is64Bit + L" /D=" + m_Path.c_str();
-			CommandHandler::RunFile(fullPath.c_str(), args.c_str());
-			clearBuffer();
-			return -1;
-		}
-	}
+	// Cafe Lock updates use its own administrator-run setup, never the upstream installer.
 
 	// Delete installer if necessary
 	if (GetPrivateProfileString(L"Rainmeter", L"DeleteInstaller", L"", buffer, MAX_LINE_LENGTH, m_DataFile.c_str()) != 0)
