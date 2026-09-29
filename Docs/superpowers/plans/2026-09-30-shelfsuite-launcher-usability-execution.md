@@ -16,8 +16,9 @@ Unmodified approved plan revision 7715d631d2a2bbac6c1556281a1ca792327c1256 passe
 
 ## Task status
 
-1. Session/protocol: RED observed: 49 checks, 17 expected assertion failures at 3039f337e744db32a6c793fac8762c3dafb01d3d, run 36638064658 / job 109643475043. Compilation succeeded. Session/protocol implementation prepared; GREEN pending.
-2–7. Not started.
+1. Session/protocol: RED observed: 49 checks, 17 expected assertion failures at 3039f337e744db32a6c793fac8762c3dafb01d3d, run 36638064658 / job 109643475043. Compilation succeeded. GREEN: 49 checks, 0 failures at e0fbf3c33105f2dc1c3bdb22ac2818f4d7d80686, run 36638270579 / job 109644150707; MSVC x64 /W4 /WX. Task 1 complete, excluding saveEdits as ruled above.
+2. Host/selection: dependency acquisition verification started; host/drop tests pending.
+3–7. Not started.
 
 ## Test infrastructure correction
 
@@ -31,3 +32,9 @@ The first test compilation (9a8d9da, run 36637946440) found MSVC C4310 in the in
 - Tasks 5/6: typed EditBatch and source versions are required before saveEdits is enabled.
 - Tasks 2/7: SDK restore and optional Runtime packaging stay distinct; missing Runtime must not break ordinary launchers.
 - Ruling: record progress in this committed execution document while the local workspace helper cannot run. This preserves handoff evidence without claiming local execution; cost is extra documentation commits.
+
+## Task 2 preflight ruling
+
+Ruling: inspect the actual pinned SDK package on Windows CI before committing its digest. NuGet must verify the package signature before any SDK content is used. The temporary probe is CI-only and will be superseded by the digest-enforcing restore script; a missing or invalid package blocks host integration.
+
+Ruling: upstream disables C++ exceptions globally. New standalone parser/host modules need a per-file exception setting when integrated; do not change global Rainmeter compiler behavior. Verify the same options in core tests and production integration.

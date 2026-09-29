@@ -26,6 +26,10 @@ jobs:
           if errorlevel 1 exit /b 1
           pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite Protocol
 
+      - name: Verify pinned editor SDK acquisition
+        shell: pwsh
+        run: ./Build/CafeDependencies/Inspect.ps1
+
   cafe-lock-x64:
     runs-on: windows-2022
     timeout-minutes: 45
