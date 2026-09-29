@@ -76,19 +76,24 @@ void StartDrop()
 	ComPtr<IShellItem> item;
 	HRESULT hr = SHCreateItemFromParsingName(fixtures[nextFixture].c_str(), nullptr, IID_PPV_ARGS(&item));
 	if (FAILED(hr)) { Fail("create real shell item", hr); return; }
+	std::cout << "Shell item ready\n";
 	ComPtr<IDataObject> data;
 	hr = item->BindToHandler(nullptr, BHID_DataObject, IID_PPV_ARGS(&data));
 	if (FAILED(hr)) { Fail("create real shell drag data", hr); return; }
+	std::cout << "Shell drag data ready\n";
 	POINT point = {350, 250};
 	ClientToScreen(window, &point);
+	std::cout << "Focusing target window\n";
 	SetForegroundWindow(window);
 	if (!SetCursorPos(point.x, point.y)) { Fail("no input desktop cursor access", HRESULT_FROM_WIN32(GetLastError())); return; }
+	std::cout << "Cursor placed; pressing mouse\n";
 	Mouse(MOUSEEVENTF_LEFTDOWN);
 	if (finished) return;
 	SetTimer(window, 2, 500, nullptr);
 	ComPtr<IDropSource> source;
 	source.Attach(new DropSource());
 	DWORD effect = 0;
+	std::cout << "Entering OLE drag loop\n";
 	hr = DoDragDrop(data.Get(), source.Get(), DROPEFFECT_COPY | DROPEFFECT_LINK, &effect);
 	std::cout << "OLE drag returned HRESULT=" << std::hex << hr << std::dec << '\n';
 	KillTimer(window, 2);
@@ -101,7 +106,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
 	if (message == WM_APP + 1) { StartDrop(); return 0; }
 	if (message == WM_TIMER)
 	{
-		if (wp == 2) { KillTimer(hwnd, 2); Mouse(MOUSEEVENTF_LEFTUP); }
+		if (wp == 2) { std::cout << "Release timer fired\n"; KillTimer(hwnd, 2); Mouse(MOUSEEVENTF_LEFTUP); }
 		else Fail("timed out waiting for real browser drop");
 		return 0;
 	}
