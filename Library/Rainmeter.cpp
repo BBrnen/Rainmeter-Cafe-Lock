@@ -570,6 +570,7 @@ int Rainmeter::Initialize(LPCWSTR iniPath, LPCWSTR layout, bool safeStart)
 
 void Rainmeter::Finalize()
 {
+	CafeLock::Shutdown();
 	KillTimer(m_Window, TIMER_NETSTATS);
 
 	GetGameMode().ForceExit();
@@ -718,6 +719,17 @@ LRESULT CALLBACK Rainmeter::MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 
 	switch (uMsg)
 	{
+	case WM_QUERYENDSESSION:
+		return TRUE; // Cafe Lock must never veto Windows sign-out/restart/shutdown.
+
+	case WM_ENDSESSION:
+		if (wParam)
+		{
+			CafeLock::Shutdown();
+			PostQuitMessage(0);
+		}
+		return 0;
+
 	case WM_DESTROY:
 		PlaySound(nullptr, nullptr, SND_PURGE);  // Stop any sounds. See CommandHandler::ExecuteCommand
 		PostQuitMessage(0);
@@ -980,7 +992,7 @@ void Rainmeter::ReloadSettings()
 
 void Rainmeter::EditSettings()
 {
-	if (CafeLock::IsLocked()) return;
+	if (CafeLock::IsLocked()) { CafeLock::RequestMaintenance(); return; }
 
 	std::wstring file = L'"' + m_IniFile;
 	file += L'"';
@@ -989,7 +1001,7 @@ void Rainmeter::EditSettings()
 
 void Rainmeter::EditSkinFile(const std::wstring& name, const std::wstring& iniFile)
 {
-	if (CafeLock::IsLocked()) return;
+	if (CafeLock::IsLocked()) { CafeLock::RequestMaintenance(); return; }
 
 	std::wstring args = L'"' + m_SkinPath;
 	args += name;

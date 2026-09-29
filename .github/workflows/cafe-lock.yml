@@ -2,9 +2,9 @@ name: Build and test Cafe Lock
 
 on:
   push:
-    branches: [stage-3-cafe-lock]
+    branches: [stage-3-cafe-lock, stage-4-maintenance]
   pull_request:
-    branches: [main, stage-2-baseline-build]
+    branches: [main, stage-2-baseline-build, stage-3-cafe-lock]
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
             'Official baseline: 5a124b6a09e2f7f67f8be9232718c489100e6173'
             "Build commit: $env:GITHUB_SHA"
             'Configuration: Release x64; Visual Studio 2022; upstream Build.bat'
-            'Stage 3 review build: always locked. No Maintenance Mode or installer.'
+            'Stage 4 review build: locked on startup; password Maintenance Mode. No installer.'
           ) | Set-Content x64-Release/CAFE-LOCK-BUILD.txt
           Get-ChildItem x64-Release -Recurse -File |
             Where-Object { $_.FullName -notmatch '[\\/]Obj[\\/]' -and $_.Extension -in '.exe', '.dll' } |
@@ -57,14 +57,30 @@ jobs:
           if errorlevel 1 exit /b 1
           CafeLockPolicy.exe
 
-      - name: Exercise running Cafe Lock
-        shell: pwsh
-        run: ./Tests/CafeLockSmoke.ps1
+      - name: Test password setup, verification, changes, persistence and launch policy
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX Tests\CafePassword.cpp /Fe:CafePassword.exe /link Bcrypt.lib
+          if errorlevel 1 exit /b 1
+          CafePassword.exe
+
+      - name: Exercise running Cafe Lock as a standard user
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cl /nologo /EHsc /W4 /WX Tests\RunAsStandard.cpp /Fe:RunAsStandard.exe /link Advapi32.lib Shlwapi.lib
+          if errorlevel 1 exit /b 1
+          cl /nologo /EHsc /W4 /WX Tests\CafeLaunchProbe.cpp /Fe:CafeLaunchProbe.exe /link Advapi32.lib /SUBSYSTEM:WINDOWS
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeLockSmoke.ps1 -Maintenance
+          if errorlevel 1 exit /b 1
+          RunAsStandard.exe "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -File Tests\CafeLockSmoke.ps1 -StandardUser -Maintenance
 
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Rainmeter-Cafe-Lock-stage3-x64
+          name: Rainmeter-Cafe-Lock-stage4-x64
           path: |
             x64-Release
             !x64-Release/Obj

@@ -6,9 +6,16 @@
 
 namespace CafeLock
 {
-// Stage 3 deliberately has no unlock setting, bang, or command-line switch.
-// A later stage will authorize maintenance for the current process through UAC.
-inline bool IsLocked() { return true; }
+// Process-local state; only a verified password authorizes this instance.
+bool IsLocked();
+constexpr UINT MaintenanceCommand = 4090;
+constexpr UINT LockCommand = 4091;
+void RequestMaintenance();
+void ChangePassword();
+void PromptForManagement(Bang bang);
+void LockNow();
+void Shutdown();
+void ShowLockedTrayMenu(HWND owner);
 
 inline bool AllowsBang(Bang bang)
 {
@@ -68,5 +75,10 @@ inline bool IsShelfSuiteConfigurator(const WCHAR* file, const std::wstring& skin
 	const auto configurator = FullPath(skinPath + L"Shelf Suite\\@Resources\\configurator.html");
 	return !target.empty() && !configurator.empty() &&
 		_wcsicmp(target.c_str(), configurator.c_str()) == 0;
+}
+
+inline bool AllowsLaunch(const WCHAR* file, const std::wstring& skinPath)
+{
+	return !IsLocked() || !IsShelfSuiteConfigurator(file, skinPath);
 }
 }

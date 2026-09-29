@@ -62,7 +62,7 @@ void GameMode::Initialize()
 
 void GameMode::OnTimerEvent(WPARAM wParam)
 {
-	if (wParam != s_TimerEventID) return;
+	if (CafeLock::IsLocked() || wParam != s_TimerEventID) return;
 
 	bool isFullScreenOrProcessList = false;
 
@@ -176,6 +176,13 @@ void GameMode::ChangeStateManual(bool disable)
 	{
 		EnterGameMode();
 	}
+}
+
+void GameMode::SuspendForCafeLock()
+{
+	StopTimer();
+	// Freeze the current scene: no delayed game-mode layout may run after relock.
+	m_State = State::Disabled;
 }
 
 void GameMode::ForceExit()

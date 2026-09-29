@@ -28,6 +28,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CafeLock.cpp" />
     <ClCompile Include="CommandHandler.cpp" />
     <ClCompile Include="ConfigParser.cpp" />
     <ClCompile Include="ConfigParser_Test.cpp">

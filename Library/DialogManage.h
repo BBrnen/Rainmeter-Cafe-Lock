@@ -204,7 +204,11 @@ private:
 			Id_EditorEdit,
 			Id_EditorBrowseButton,
 			Id_ShowTrayIconCheckBox,
-			Id_UseHardwareAccelerationCheckBox
+			Id_UseHardwareAccelerationCheckBox,
+			Id_CafeGroup,
+			Id_CafeStatus,
+			Id_CafeChange,
+			Id_CafeLock
 		};
 
 		TabSettings();

@@ -41,6 +41,7 @@ public:
 
 	void ChangeStateManual(bool disable);
 	void ForceExit();
+	void SuspendForCafeLock();
 
 	void ValidateActions();
 
