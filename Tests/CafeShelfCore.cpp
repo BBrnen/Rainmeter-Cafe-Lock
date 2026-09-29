@@ -69,7 +69,7 @@ int main()
 	Check("malformed JSON", !DecodeRequest("{").ok);
 	Check("trailing JSON", !DecodeRequest(Message("load") + "{}").ok);
 	Check("oversized message", !DecodeRequest(std::string(MaxMessageBytes + 1, ' ')).ok);
-	Check("invalid UTF-8", !DecodeRequest(std::string("{\"id\":1,\"op\":\"") + char(0xff) + "\",\"payload\":{}}").ok);
+	Check("invalid UTF-8", !DecodeRequest(std::string("{\"id\":1,\"op\":\"") + '\xff' + "\",\"payload\":{}}").ok);
 	Check("embedded null", !DecodeRequest(Message("importDrop", {{"purpose", std::string("icon\0", 5)}})).ok);
 	Check("oversized string", !DecodeRequest(Message("importDrop", {{"purpose", std::string(MaxStringUnits + 1, 'a')}})).ok);
 	Check("excessive nesting", !DecodeRequest(std::string(MaxJsonDepth + 1, '[') + "0" + std::string(MaxJsonDepth + 1, ']')).ok);
