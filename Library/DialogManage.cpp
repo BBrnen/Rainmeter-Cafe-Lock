@@ -69,7 +69,7 @@ void DialogManage::Open(const WCHAR* name)
 */
 void DialogManage::Open(int tab)
 {
-	if (CafeLock::IsLocked()) return;
+	if (CafeLock::IsLocked()) { CafeLock::RequestMaintenance(); return; }
 
 	if (!c_Dialog)
 	{
@@ -2416,7 +2416,11 @@ void DialogManage::TabSettings::Create(HWND owner)
 			WS_VISIBLE | WS_TABSTOP, 0),
 		CT_BUTTON(Id_DeleteLogFileButton, ID_STR_DELETELOGFILE,
 			buttonWidth + 30, 196, buttonWidth + 20, 14,
-			WS_VISIBLE | WS_TABSTOP, 0)
+			WS_VISIBLE | WS_TABSTOP, 0),
+		CT_GROUPBOX(Id_CafeGroup, 0, 0, 222, 478, 37, WS_VISIBLE, 0),
+		CT_LABEL(Id_CafeStatus, 0, 6, 237, 230, 12, WS_VISIBLE, 0),
+		CT_BUTTON(Id_CafeChange, 0, 265, 236, 120, 16, WS_VISIBLE | WS_TABSTOP, 0),
+		CT_BUTTON(Id_CafeLock, 0, 391, 236, 80, 16, WS_VISIBLE | WS_TABSTOP, 0)
 	};
 
 	CreateControls(s_Controls, _countof(s_Controls), c_Dialog->m_Font, GetString);
@@ -2424,6 +2428,10 @@ void DialogManage::TabSettings::Create(HWND owner)
 
 void DialogManage::TabSettings::Initialize()
 {
+	SetWindowText(GetControl(Id_CafeGroup), L"Security / Cafe Lock settings");
+	SetWindowText(GetControl(Id_CafeStatus), CafeLock::IsLocked() ? L"Mode: Locked" : L"Mode: Maintenance (editing unlocked)");
+	SetWindowText(GetControl(Id_CafeChange), L"Change password...");
+	SetWindowText(GetControl(Id_CafeLock), L"Lock Now");
 	UpdateLanguageStatus();
 
 	// Scan for languages
@@ -2536,6 +2544,12 @@ INT_PTR DialogManage::TabSettings::OnCommand(WPARAM wParam, LPARAM lParam)
 
 	switch (LOWORD(wParam))
 	{
+	case Id_CafeChange:
+		CafeLock::ChangePassword();
+		return TRUE;
+	case Id_CafeLock:
+		PostMessage(GetRainmeter().GetTrayIcon()->GetWindow(), WM_COMMAND, CafeLock::LockCommand, 0);
+		return TRUE;
 	case Id_LanguageDropDownList:
 		if (HIWORD(wParam) == CBN_SELCHANGE)
 		{

@@ -2,7 +2,7 @@
 #include "../Library/CafeLock.h"
 #include <cassert>
 
-// This executable tests the locked policy; IPC/state tests exercise the real authorization class.
+// This executable tests the locked policy; password/state tests exercise the real session class.
 bool CafeLock::IsLocked() { return true; }
 
 int main()

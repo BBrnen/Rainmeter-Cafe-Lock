@@ -807,7 +807,7 @@ void Skin::ChangeSingleZPos(ZPOSITION zPos, bool all)
 */
 void Skin::DoBang(Bang bang, const std::vector<std::wstring>& args)
 {
-	if (!CafeLock::AllowsBang(bang)) return;
+	if (!CafeLock::AllowsBang(bang)) { CafeLock::PromptForManagement(bang); return; }
 
 	switch (bang)
 	{
@@ -3920,7 +3920,11 @@ LRESULT Skin::OnMouseHScrollMove(UINT uMsg, WPARAM wParam, LPARAM lParam)
 */
 LRESULT Skin::OnCommand(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (CafeLock::IsLocked()) return 0;
+	if (CafeLock::IsLocked())
+	{
+		if (wParam == IDM_SKIN_EDITSKIN || wParam == IDM_SKIN_MANAGESKIN || wParam == IDM_MANAGE || wParam == IDM_EDITCONFIG) CafeLock::RequestMaintenance();
+		return 0;
+	}
 
 	switch (wParam)
 	{

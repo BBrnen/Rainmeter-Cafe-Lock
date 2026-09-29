@@ -486,6 +486,7 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 			if (lParam == WM_RBUTTONUP) CafeLock::ShowLockedTrayMenu(hWnd);
 			return 0;
 		}
+		if (uMsg == WM_COMMAND && (wParam == IDM_MANAGE || wParam == IDM_EDITCONFIG || wParam == IDM_SKIN_EDITSKIN || wParam == IDM_SKIN_MANAGESKIN)) CafeLock::RequestMaintenance();
 		if (uMsg == WM_COMMAND || uMsg == WM_CLOSE) return 0;
 	}
 

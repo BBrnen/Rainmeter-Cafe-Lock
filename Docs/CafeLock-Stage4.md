@@ -1,103 +1,73 @@
-# Stage 4: session Maintenance Mode
+# Stage 4: password Maintenance Mode
 
-Rainmeter starts locked every time. Right-click its tray icon and select **Enter
-Maintenance Mode (administrator)**. Approve Windows UAC (or supply administrator
-credentials). The tooltip changes to **Maintenance**. Normal skin and management
-behavior then resumes. **Lock Now**, at the top of Rainmeter's context menu,
-relocks immediately. If a custom TrayExecute action replaces right-click, hold
-Ctrl while right-clicking the tray to reach the normal menu.
+Rainmeter starts locked every time. Right-click the tray and choose **Unlock /
+Enter Maintenance Mode**. On first use, create and confirm a local Cafe Lock
+password. Later requests show **Enter Cafe Lock Password**, with Unlock and
+Cancel. An incorrect password leaves the instance locked and displays an error.
 
-The tray remains available even with TrayIcon=0 so authorization and Lock Now
-cannot become inaccessible. While locked, the tray menu contains only the
-maintenance request. Skin context menus remain suppressed.
+Maintenance restores normal controls. **Lock Now** immediately relocks and closes
+Rainmeter management/password dialogs. Manage > Settings includes **Security /
+Cafe Lock settings**, current mode, Change password, and Lock Now. Changing the
+password requires the current password and matching new entries. Restart never
+retains authorization. There is no timeout or Windows-session-lock policy.
 
-There is no setting, bang, password, environment variable, registry key, startup
-argument or file that grants maintenance. No timeout or workstation-lock policy
-has been added. The only unlock path is the authenticated live helper connection.
+The tray stays available even with TrayIcon=0. While locked it exposes only
+Unlock / Enter Maintenance Mode. Manage/Edit requests through bangs, skin commands,
+tray commands, and direct entry points open the password dialog instead. They are
+not queued: after unlocking, repeat the requested Manage/Edit action. This avoids
+executing stale management commands after authorization. With custom tray actions,
+Ctrl + right-click in Maintenance opens the normal menu containing Lock Now.
 
-## Authorization boundary
+## Password storage and boundary
 
-`CafeSecurity::Authorization` creates a fresh GUID-named, local-only, first-instance
-named pipe for each request. Rainmeter launches the fixed sibling executable
-`RainmeterCafeMaintenance.exe` using ShellExecuteEx `runas`. That executable also
-has a `requireAdministrator` manifest. Rainmeter retains the returned process
-handle; the helper does not launch Rainmeter or any user programs.
+`Common/CafePassword.h` uses Windows CNG PBKDF2-HMAC-SHA256 with 600,000 iterations,
+a fresh 32-byte BCryptGenRandom salt, and a 32-byte verifier. Password encoding is
+UTF-16LE without the terminator, versioned explicitly in the record. Verification
+uses a fixed-length XOR comparison without early exit. Password fields are masked,
+limited to 256 UTF-16 code units, and cleared after every submission and on close;
+local password buffers are explicitly wiped. Passwords are never logged, passed
+on a command line, or serialized.
 
-On receiving the fixed, non-secret request, Rainmeter verifies all of:
+`CafeLock.ini` in Rainmeter's settings directory stores only Algorithm, Iterations,
+Salt, and Verifier. It is separate from Rainmeter.ini so layout replacement cannot
+erase credentials. Writes use a unique temporary file, flush, and atomic rename;
+first setup cannot replace an existing record. Existing malformed/unreadable
+records fail closed, rather than becoming first-run setup. Only an absent file
+permits setup. A password change creates a new salt. Unlock state exists only in
+process memory; no setting, bang, environment variable or startup flag unlocks it.
 
-- The kernel-reported pipe client PID matches the still-running process handle
-  returned by its own UAC launch.
-- The actual pipe-client token is elevated, has an enabled Administrators SID,
-  has high (or higher) integrity, and belongs to Rainmeter's Windows session.
-- The helper checks the pipe server PID and process creation time against the
-  requesting instance. PID reuse or a different running instance is not enough.
+This local application lock is not an OS security boundary. A person able to modify
+or delete the verifier file can reset it; arbitrary same-user code can also alter
+the process or writable program files. Installer ACLs and deployment hardening are
+explicitly deferred. First-use setup must be completed by the cafe operator before
+customers use the machine. There is no recovery/backdoor password.
 
-The helper opens the connection with `SECURITY_IDENTIFICATION`. Rainmeter can
-inspect identity and privileges but cannot act with the helper's administrator
-privileges. It reverts immediately after checking the token. See Microsoft's
-[impersonation levels](https://learn.microsoft.com/en-us/windows/win32/secauthz/impersonation-levels)
-and [named-pipe impersonation](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-impersonatenamedpipeclient).
+Microsoft API references:
+- [BCryptDeriveKeyPBKDF2](https://learn.microsoft.com/en-us/windows/win32/api/bcrypt/nf-bcrypt-bcryptderivekeypbkdf2)
+- [BCryptGenRandom](https://learn.microsoft.com/en-us/windows/win32/api/bcrypt/nf-bcrypt-bcryptgenrandom)
 
-Only completed, authenticated pipe I/O changes in-memory authorization. Timer
-messages merely poll the pipe. No window message, copied payload, arbitrary PID
-or pipe name grants authorization. Lock Now cancels pending I/O, so a late helper
-response cannot unlock the relocked instance. The helper exits after its exchange;
-its 30-second exchange bound is not a maintenance-session timeout.
+The former UAC executable/project, named-pipe authorization, and helper tests have
+been removed. Rainmeter does not request elevation or change the launch token.
 
-Windows applies its configured UAC policy. A system configured to approve elevation
-silently may not show a prompt. The code requires the elevated administrator token;
-it does not invent a replacement credential dialog.
+## Compatibility and validation
 
-This is an application-management lock, not isolation from arbitrary code running
-as the same Windows user. Process injection, replacing writable program files,
-external editors/configurators already open when relocking, and native skin
-plugins are outside this boundary. Program/install ACLs are intentionally deferred
-to the deployment stage. Lock Now closes Rainmeter's own management dialogs and
-cancels selection/dragging; it does not terminate unrelated user programs.
+All Stage 3 guards remain. ShelfSuite files are unchanged. Its exact configurator
+launcher path is denied while locked and allowed in Maintenance; ordinary app
+launchers, hover, tabs, meters and Lua continue. OnKeyDown now gates only the
+upstream selected-skin arrow-key movement block (the handler has no general skin
+keyboard dispatch).
 
-## Shutdown and keyboard behavior
+Windows CI builds x64, checks PE architecture and produces checksummed review
+artifacts. Production-core tests cover setup, mismatch/empty rejection, correct and
+wrong passwords, change requiring the current password, old/new verification,
+fresh salts, relock/restart, ShelfSuite launch policy, malformed records, and no
+plaintext configuration. Runtime tests operate native dialogs and actual Rainmeter
+with both the runner and a restricted standard-user token: Manage/Edit prompts,
+setup/mismatch/change/wrong/old/new, management restoration, launcher token,
+configuration writes, Lock Now, restart, modifier dragging, groups, tabs, hover,
+Lua, and config/log plaintext scanning.
 
-The control window immediately accepts WM_QUERYENDSESSION and exits on confirmed
-WM_ENDSESSION, without relying on WM_CLOSE. A cancelled shutdown preserves the
-running session. This follows Microsoft's
-[Windows end-session protocol](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-queryendsession).
-
-The upstream Skin::OnKeyDown handler only moves selected skins with arrow keys;
-it does not dispatch keyboard events to skins. Its lock check now surrounds only
-that movement block. InputText and other plugins have their own input windows.
-ShelfSuite files are unchanged; its existing configurator launcher guard applies
-only while locked and naturally stops applying after authorization.
-
-## Validation and review
-
-CI builds Release x64 including the maintenance helper, verifies PE architecture,
-and runs the locked policy, actual pipe/token, and running Rainmeter tests. Tests
-cover a forged request from a restricted token, authenticated helper success,
-late-response cancellation, repeat authorization, relock, movement, Manage/Edit,
-configuration writes, activation/unload, and process restart. The CI standard-user
-launcher is a test executable only and is not included in the release directory.
-The ordinary hosted desktop pass covers authenticated maintenance transitions and
-modifier input. The restricted-token pass verifies locked enforcement, standard-user
-app launching, and rejection when its helper starts without elevation. On this
-hosted runner, runas from the synthetic restricted token does not produce an
-elevated helper; the helper exits with code 2 and Rainmeter stays locked. This is
-**not** proof of successful credential-based unlocking from a real standard-user
-account. That remains required manual validation before Stage 4 approval.
-
-End-session tests send Windows' query, cancellation and confirmation messages to
-the test process; they do not reboot or sign out the runner. A hosted runner also
-cannot verify a human-approved/cancelled secure-desktop credential prompt.
-
-Before approving Stage 4, validate on a disposable Windows standard-user session:
-
-1. Cancel the actual UAC prompt: dragging, menus and settings remain locked.
-2. Supply administrator credentials: unlock only the requesting instance. Confirm
-   Rainmeter and an app launched by a skin remain standard-user processes.
-3. Open ShelfSuite settings, exercise tabs/hover/launchers and any installed input
-   plugins. Lock Now; its settings launcher is blocked again.
-4. Exit/relaunch while in maintenance: the new process is locked.
-5. Sign out, restart and shut down Windows with locked Rainmeter running, and
-   repeat with an authorization prompt pending. Windows must finish normally.
-
-Installer work and deployment ACLs are not part of Stage 4. PRs remain stacked
-and unmerged for review.
+End-session tests send query/cancel/confirmed messages, including logoff, shutdown
+and critical flags. They do not actually reboot/sign out the runner. Actual Windows
+sign-out/restart/shutdown and the complete ShelfSuite package still need hands-on
+compatibility testing; no installer/deployment work is included here.

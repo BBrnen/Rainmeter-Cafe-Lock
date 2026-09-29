@@ -754,11 +754,7 @@ LRESULT CALLBACK Rainmeter::MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 		break;
 
 	case WM_TIMER:
-		if (wParam == CafeLock::MaintenanceTimer)
-		{
-			CafeLock::PollMaintenance();
-		}
-		else if (wParam == TIMER_NETSTATS)
+		if (wParam == TIMER_NETSTATS)
 		{
 			MeasureNet::UpdateIFTable();
 			MeasureNet::UpdateStats();
@@ -996,7 +992,7 @@ void Rainmeter::ReloadSettings()
 
 void Rainmeter::EditSettings()
 {
-	if (CafeLock::IsLocked()) return;
+	if (CafeLock::IsLocked()) { CafeLock::RequestMaintenance(); return; }
 
 	std::wstring file = L'"' + m_IniFile;
 	file += L'"';
@@ -1005,7 +1001,7 @@ void Rainmeter::EditSettings()
 
 void Rainmeter::EditSkinFile(const std::wstring& name, const std::wstring& iniFile)
 {
-	if (CafeLock::IsLocked()) return;
+	if (CafeLock::IsLocked()) { CafeLock::RequestMaintenance(); return; }
 
 	std::wstring args = L'"' + m_SkinPath;
 	args += name;

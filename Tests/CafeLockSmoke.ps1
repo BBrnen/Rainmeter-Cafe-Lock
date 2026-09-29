@@ -1,4 +1,4 @@
-param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance, [switch]$StandardUser, [switch]$ExpectElevationUnavailable)
+param([string]$BuildDirectory = "$PSScriptRoot/../x64-Release", [switch]$Maintenance, [switch]$StandardUser)
 $ErrorActionPreference = 'Stop'
 $build = (Resolve-Path $BuildDirectory).Path
 $root = Join-Path $env:RUNNER_TEMP ('CafeLock-' + [guid]::NewGuid())
@@ -82,6 +82,17 @@ public static class LockNative {
  [StructLayout(LayoutKind.Sequential)] struct CopyData { public IntPtr Id; public int Size; public IntPtr Data; }
  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr w, out Rect r);
+ [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool SetDlgItemText(IntPtr w,int id,string text);
+ [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetDlgItemText(IntPtr w,int id,System.Text.StringBuilder text,int size);
+ [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr w,int id);
+ public delegate bool EnumChildProc(IntPtr w,IntPtr p);
+ [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr w,EnumChildProc proc,IntPtr p);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr w,System.Text.StringBuilder text,int size);
+ public static IntPtr Child(IntPtr parent,string text) {
+   IntPtr found=IntPtr.Zero;
+   EnumChildWindows(parent,(w,p)=>{var b=new System.Text.StringBuilder(256);GetWindowText(w,b,256);if(b.ToString()==text)found=w;return true;},IntPtr.Zero);
+   return found;
+ }
  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr w);
  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr w,uint msg,IntPtr wp,IntPtr lp);
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
@@ -95,7 +106,7 @@ public static class LockNative {
  }
  [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SendMessageTimeout(IntPtr w,uint msg,IntPtr wp,IntPtr lp,uint flags,uint ms,out IntPtr result);
  public static IntPtr Send(IntPtr w,uint msg,long wp,long lp) {
-   IntPtr result; if(SendMessageTimeout(w,msg,new IntPtr(wp),new IntPtr(lp),2,2000,out result)==IntPtr.Zero)
+   IntPtr result; if(SendMessageTimeout(w,msg,new IntPtr(wp),new IntPtr(lp),2,20000,out result)==IntPtr.Zero)
      throw new Exception("Window message failed or timed out: " + msg);
    return result;
  }
@@ -121,6 +132,27 @@ function Position($window) {
   if (-not [LockNative]::GetWindowRect($window, [ref]$r)) { throw 'Missing skin window' }
   return "$($r.Left),$($r.Top)"
 }
+function Password-Dialog($title) {
+  Wait-For { [LockNative]::FindWindow('#32770',$title) -ne [IntPtr]::Zero } $title
+  return [LockNative]::FindWindow('#32770',$title)
+}
+function Submit-Password($dialog, $password, $confirm = '', $current = '') {
+  [void][LockNative]::SetDlgItemText($dialog,100,$password)
+  [void][LockNative]::SetDlgItemText($dialog,101,$confirm)
+  [void][LockNative]::SetDlgItemText($dialog,102,$current)
+  [void][LockNative]::Send($dialog,0x111,1,0)
+}
+function Assert-PasswordError($dialog) {
+  $text = [Text.StringBuilder]::new(256)
+  [void][LockNative]::GetDlgItemText($dialog,203,$text,256)
+  if (-not [LockNative]::IsWindow($dialog) -or $text.Length -eq 0) { throw 'Expected password error with dialog still open' }
+}
+function Cancel-Password($title) {
+  $dialog = Password-Dialog $title
+  [void][LockNative]::Send($dialog,0x111,2,0)
+}
+$password = 'Runtime Cafe password first!'
+$newPassword = 'Runtime Cafe password changed!'
 $process = $null
 try {
   $process = Start-Process (Join-Path $build 'Rainmeter.exe') -ArgumentList "`"$ini`"" -PassThru
@@ -165,19 +197,30 @@ try {
   [void][LockNative]::SetCursorPos(600,600)
   [void][LockNative]::Send($window,0x2A3,0,0)
   Wait-For { Test-Path "$fixture/leave.txt" } 'mouse-leave action'
-  $commands = @('!Manage','!EditSkin LockTest Test.ini','!DeactivateConfig LockTest','!DeactivateConfigGroup LockGroup',
+  $commands = @('!DeactivateConfig LockTest','!DeactivateConfigGroup LockGroup',
     '!ToggleConfig LockTest Test.ini','!ActivateConfig LockTest ZAlternate.ini','!LoadLayout Replacement',
     '!Move 400 400 LockTest','!SetWindowPosition 400 400 LockTest','!Draggable 1 LockTest',
     '!DraggableGroup 1 LockGroup','!SkinMenu LockTest','!SkinCustomMenu LockTest','!TrayMenu','!Quit',
-    '!RainmeterManage','!Execute [!Manage][!DeactivateConfig LockTest]',
     "!WriteKeyValue Rainmeter CafeLock 0 `"$ini`"")
   foreach ($command in $commands) {
     [LockNative]::Bang($window, $command)
     [LockNative]::Bang($control, $command)
   }
-  foreach ($id in @(4002,4003,4004,4007,4030,4053)) {
+  foreach ($id in @(4002,4003,4007)) {
     [void][LockNative]::Send($window,0x111,$id,0)
     [void][LockNative]::Send($tray,0x111,$id,0)
+  }
+  foreach ($command in @('!Manage','!RainmeterManage','!EditSkin LockTest Test.ini','!Execute [!Manage]')) {
+    foreach ($target in @($window,$control)) {
+      [LockNative]::Bang($target,$command)
+      Cancel-Password 'Create Cafe Lock Password'
+    }
+  }
+  foreach ($id in @(4004,4006,4030,4053)) {
+    foreach ($target in @($window,$tray)) {
+      [void][LockNative]::Send($target,0x111,$id,0)
+      Cancel-Password 'Create Cafe Lock Password'
+    }
   }
   foreach ($mouse in @(0x202,0x203,0x204)) { [void][LockNative]::Send($tray,1125,0,$mouse) }
   foreach ($handle in @($window,$tray,$control)) { [void][LockNative]::Send($handle,0x10,0,0) }
@@ -195,35 +238,33 @@ try {
   if (Test-Path "$root/editor-opened.txt") { throw 'Edit launched the configured editor' }
   if ((Get-Content $ini -Raw) -match 'CafeLock=0') { throw 'Configuration write was accepted' }
   Write-Output "PASS: locked command/action regression; Lua tabs/updates; hover; app launch. Modifier injection included: $(-not $StandardUser)"
-  # No window-message payload can substitute for a live authenticated helper.
-  1..5 | ForEach-Object { [void][LockNative]::Send($control,0x113,4092,1) }
-  [LockNative]::Bang($control,'!Move 150 150 LockTest')
-  Start-Sleep -Milliseconds 300
-  if ((Position $window) -ne $before) { throw 'Fake authorization notification unlocked Rainmeter' }
-  if ($ExpectElevationUnavailable) {
-    [void][LockNative]::PostMessage($tray,0x111,[IntPtr]4090,[IntPtr]::Zero)
-    Wait-For {
-      (Get-Content "$root/Rainmeter.log" -Raw) -match 'Helper exited before authorization \(2\)'
-    } 'non-elevated helper refuses authorization on the restricted hosted runner'
-    [LockNative]::Bang($control,'!Move 450 450 LockTest')
-    Start-Sleep -Milliseconds 300
-    if ((Position $window) -ne $before) { throw 'Non-elevated helper unlocked Rainmeter' }
-    Write-Output 'PASS: standard-user Rainmeter and launcher; unavailable elevation fails closed. Real credential-based UAC remains a manual test.'
-  }
   if ($Maintenance) {
-    # Hosted runner is already elevated: this covers the real helper handshake,
-    # not the human interaction with a UAC secure-desktop credential dialog.
-    [void][LockNative]::PostMessage($tray,0x111,[IntPtr]4090,[IntPtr]::Zero)
-    Wait-For {
-      [LockNative]::Bang($control,'!Move 150 150 LockTest')
-      (Position $window) -eq '150,150'
-    } 'elevated helper authorizes maintenance and movement resumes'
+    [void][LockNative]::Send($tray,0x111,4090,0)
+    $dialog = Password-Dialog 'Create Cafe Lock Password'
+    Submit-Password $dialog $password 'mismatch'
+    Assert-PasswordError $dialog
+    if (Test-Path "$root/CafeLock.ini") { throw 'Mismatch persisted a password' }
+    Submit-Password $dialog $password $password
+    Wait-For { -not [LockNative]::IsWindow($dialog) } 'creation unlock'
+    [LockNative]::Bang($control,'!Move 150 150 LockTest')
+    Wait-For { (Position $window) -eq '150,150' } 'password authorizes maintenance movement'
     [void][LockNative]::PostMessage($window,0x7b,[IntPtr]::Zero,[IntPtr](-1))
     Wait-For { [LockNative]::FindWindow('#32768',$null) -ne [IntPtr]::Zero } 'maintenance context menu'
     [void][LockNative]::Send($window,0x1f,0,0)
     Wait-For { [LockNative]::FindWindow('#32768',$null) -eq [IntPtr]::Zero } 'context menu dismissal'
     [LockNative]::Bang($control,'!Manage')
     Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero } 'maintenance Manage dialog'
+    [LockNative]::Bang($control,'!Manage Settings')
+    $manage = [LockNative]::FindWindow('#32770','Manage Rainmeter')
+    $change = [LockNative]::Child($manage,'Change password...')
+    if ($change -eq [IntPtr]::Zero) { throw 'Cafe Lock settings section missing' }
+    if ([LockNative]::Child($manage,'Mode: Maintenance (editing unlocked)') -eq [IntPtr]::Zero) { throw 'Maintenance status missing' }
+    [void][LockNative]::Send($change,0xF5,0,0)
+    $dialog = Password-Dialog 'Change Cafe Lock Password'
+    Submit-Password $dialog $newPassword $newPassword 'wrong current'
+    Assert-PasswordError $dialog
+    Submit-Password $dialog $newPassword $newPassword $password
+    Wait-For { -not [LockNative]::IsWindow($dialog) } 'password changed'
     [LockNative]::Bang($control,'!EditSkin LockTest Test.ini')
     Wait-For { Test-Path "$root/editor-opened.txt" } 'maintenance editor'
     if ($StandardUser -and (Get-Content "$root/editor-opened.txt" -Raw) -ne 'standard') { throw 'Maintenance elevated the editor' }
@@ -244,12 +285,19 @@ try {
     Start-Sleep -Milliseconds 300
     if ((Position $window) -ne '150,150') { throw 'Lock Now failed to block movement' }
     if ((Get-Content $ini -Raw) -match 'AfterLock=forbidden') { throw 'Lock Now failed to block writes' }
-    # Repeated approval, unload/activate, then restart from maintenance.
-    [void][LockNative]::PostMessage($tray,0x111,[IntPtr]4090,[IntPtr]::Zero)
-    Wait-For {
-      [LockNative]::Bang($control,'!Move 160 160 LockTest')
-      (Position $window) -eq '160,160'
-    } 'second maintenance authorization'
+    [void][LockNative]::Send($tray,0x111,4090,0)
+    $dialog = Password-Dialog 'Enter Cafe Lock Password'
+    Submit-Password $dialog $password
+    Assert-PasswordError $dialog
+    [LockNative]::Bang($control,'!Move 350 350 LockTest')
+    Start-Sleep -Milliseconds 100
+    if ((Position $window) -ne '150,150') { throw 'Old password granted access' }
+    Submit-Password $dialog 'incorrect'
+    Assert-PasswordError $dialog
+    Submit-Password $dialog $newPassword
+    Wait-For { -not [LockNative]::IsWindow($dialog) } 'new password unlock'
+    [LockNative]::Bang($control,'!Move 160 160 LockTest')
+    Wait-For { (Position $window) -eq '160,160' } 'second maintenance authorization'
     $restoredHit = [LockNative]::Send($window,0x84,0,(170 -bor (170 -shl 16)))
     if ($restoredHit.ToInt64() -ne 2) { throw 'Relock overwrote the saved draggable preference' }
     [LockNative]::Bang($control,'!DeactivateConfig LockPeer')
@@ -267,7 +315,11 @@ try {
     [LockNative]::Bang($control,'!Move 450 450 LockTest')
     Start-Sleep -Milliseconds 300
     if ((Position $window) -ne $beforeRestart) { throw 'Restart retained maintenance authorization' }
-    Write-Output "PASS: real helper unlock; Manage/Edit/write; Lock Now; repeat authorization; Unload/Activate; process restart locked. Standard-user pass: $StandardUser"
+    Write-Output "PASS: native password setup/mismatch/unlock/change/old rejected/new accepted; Manage/Edit/write; Lock Now; repeat authorization; Unload/Activate; process restart locked. Standard-user pass: $StandardUser"
+  }
+  foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
+    $content = Get-Content -LiteralPath $file.FullName -Raw
+    if ($content.Contains($password) -or $content.Contains($newPassword)) { throw 'Plaintext password found in configuration/logs' }
   }
   # Exercise the documented Windows protocol without signing out/rebooting the runner.
   foreach ($reason in @(0,2147483648,1073741824)) {

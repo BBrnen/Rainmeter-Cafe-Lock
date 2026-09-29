@@ -507,7 +507,7 @@ void CommandHandler::ExecuteBang(const WCHAR* name, std::vector<std::wstring>& a
 	{
 		if (_wcsicmp(bangInfo.name, name) == 0)
 		{
-			if (!CafeLock::AllowsBang(bangInfo.bang)) return;
+			if (!CafeLock::AllowsBang(bangInfo.bang)) { CafeLock::PromptForManagement(bangInfo.bang); return; }
 			DoBang(bangInfo, args, skin);
 			return;
 		}
@@ -517,7 +517,7 @@ void CommandHandler::ExecuteBang(const WCHAR* name, std::vector<std::wstring>& a
 	{
 		if (_wcsicmp(bangInfo.name, name) == 0)
 		{
-			if (!CafeLock::AllowsBang(bangInfo.bang)) return;
+			if (!CafeLock::AllowsBang(bangInfo.bang)) { CafeLock::PromptForManagement(bangInfo.bang); return; }
 			DoGroupBang(bangInfo, args, skin);
 			return;
 		}
@@ -527,7 +527,7 @@ void CommandHandler::ExecuteBang(const WCHAR* name, std::vector<std::wstring>& a
 	{
 		if (_wcsicmp(bangInfo.name, name) == 0)
 		{
-			if (!CafeLock::AllowsBang(bangInfo.bang)) return;
+			if (!CafeLock::AllowsBang(bangInfo.bang)) { CafeLock::PromptForManagement(bangInfo.bang); return; }
 			bangInfo.handlerFunc(args, skin);
 			return;
 		}
@@ -583,7 +583,7 @@ void CommandHandler::RunCommand(std::wstring command)
 */
 void CommandHandler::RunFile(const WCHAR* file, const WCHAR* args)
 {
-	if (CafeLock::IsLocked() && CafeLock::IsShelfSuiteConfigurator(file, GetRainmeter().GetSkinPath())) return;
+	if (!CafeLock::AllowsLaunch(file, GetRainmeter().GetSkinPath())) return;
 
 	SHELLEXECUTEINFO si = {sizeof(SHELLEXECUTEINFO)};
 	si.lpVerb = L"open";
