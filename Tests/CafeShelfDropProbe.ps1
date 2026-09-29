@@ -34,9 +34,10 @@ if ($ProcessRegression) {
 }
 
 if (!$onCi) {
-    Write-Host 'This test moves the mouse in its own test window. Use a spare PC/VM.'
+    Write-Host 'MANUAL drop test: use a spare PC/VM. This version does not move the mouse.'
     Write-Host 'It creates temporary fixtures only; it does not change Rainmeter or ShelfSuite.'
-    Write-Host 'Press any key to start, then leave the mouse alone until the test ends.'
+    Write-Host 'File Explorer will open with four prepared test items. Drag them into the test window as prompted.'
+    Write-Host 'Press any key to start. You have up to ten minutes to finish the four drops.'
     [void][Console]::ReadKey($true)
 }
 $repo = Split-Path $PSScriptRoot -Parent
@@ -44,13 +45,15 @@ $temporaryRoot = if ($onCi) { $env:RUNNER_TEMP } else { $env:TEMP }
 $directory = Join-Path $temporaryRoot ("CafeShelfDrop-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $directory | Out-Null
 Write-Host "Diagnostic files: $directory"
-$folder = Join-Path $directory 'Folder with spaces'
+$fixturesDirectory = Join-Path $directory 'Drop these four items'
+New-Item -ItemType Directory -Path $fixturesDirectory | Out-Null
+$folder = Join-Path $fixturesDirectory 'Folder with spaces'
 New-Item -ItemType Directory -Path $folder | Out-Null
-$exe = Join-Path $directory 'Application.exe'
+$exe = Join-Path $fixturesDirectory 'Application.exe'
 Copy-Item -LiteralPath (Join-Path $env:WINDIR 'System32/notepad.exe') -Destination $exe
-$document = Join-Path $directory 'Document.txt'
+$document = Join-Path $fixturesDirectory 'Document.txt'
 [System.IO.File]::WriteAllText($document, 'Harmless drop fixture; never executed.')
-$link = Join-Path $directory 'Shortcut.lnk'
+$link = Join-Path $fixturesDirectory 'Shortcut.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($link)
 $shortcut.TargetPath = $exe
@@ -118,14 +121,16 @@ try {
         $probeArguments = @((Join-Path $directory 'CafeShelfDropProbe.exe')) + $probeArguments
     } else {
         $program = Join-Path $directory 'CafeShelfDropProbe.exe'
-        $probeArguments += '--disposable-vm'
+        $probeArguments += '--manual-disposable-vm'
+        Invoke-Item -LiteralPath $fixturesDirectory
     }
     $quotedArguments = $probeArguments | ForEach-Object { '"' + $_ + '"' }
     $probe = Start-ProbeProcess -Program $program -Arguments $quotedArguments -OutLog $outLog -ErrLog $errLog
     try {
-        if (!$probe.WaitForExit(120000)) {
+        $waitMs = if ($onCi) { 120000 } else { 660000 }
+        if (!$probe.WaitForExit($waitMs)) {
             & taskkill.exe /PID $probe.Id /T /F | Out-Null
-            throw 'Real drop probe exceeded 120 seconds; this desktop has not proved drag/drop.'
+            throw 'The drop test exceeded its time limit; no completed drag/drop result was obtained.'
         }
         $probe.Refresh()
         if ($null -eq $probe.ExitCode) { throw 'Diagnostic exit code unavailable; do not treat this run as a pass.' }

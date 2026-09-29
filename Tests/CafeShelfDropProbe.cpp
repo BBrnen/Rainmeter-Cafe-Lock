@@ -22,6 +22,7 @@ ComPtr<ICoreWebView2> view;
 std::vector<std::wstring> fixtures;
 size_t nextFixture = 0;
 bool syntheticRejected = false;
+bool manualDrops = false;
 std::atomic<bool> finished{false};
 std::thread dragThread;
 int result = 1;
@@ -115,6 +116,20 @@ void RunDrop(const std::wstring& path)
 void StartDrop()
 {
 	if (finished || nextFixture >= fixtures.size()) return;
+	if (manualDrops)
+	{
+		// No synthetic mouse input or OLE source thread in manual mode.
+		// Only the real browser additional-object callback can pass a fixture.
+		const wchar_t* prompts[] = {
+			L"next:1/4 - Drag Shortcut (Shortcut.lnk) here",
+			L"next:2/4 - Drag Application (Application.exe) here",
+			L"next:3/4 - Drag Folder with spaces here",
+			L"next:4/4 - Drag Document (Document.txt) here"
+		};
+		std::wcout << L"WAIT " << prompts[nextFixture] + 5 << L'\n';
+		if (FAILED(view->PostWebMessageAsString(prompts[nextFixture]))) Fail("show manual drop prompt");
+		return;
+	}
 	if (dragThread.joinable()) dragThread.join();
 	const auto path = fixtures[nextFixture];
 	std::cout << "Starting Windows OLE drop " << nextFixture << '\n';
@@ -221,6 +236,12 @@ HRESULT Receive(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args)
 	if (FAILED(args->TryGetWebMessageAsString(&message))) { Fail("message type"); return S_OK; }
 	const std::wstring kind = message;
 	CoTaskMemFree(message);
+	if (kind.compare(0, 6, L"event:") == 0)
+	{
+		// Progress only. Browser event text cannot satisfy any native-path check.
+		std::wcout << L"Browser " << kind << L'\n';
+		return S_OK;
+	}
 	if (kind == L"fakeRejected")
 	{
 		syntheticRejected = true;
@@ -290,7 +311,8 @@ int wmain(int argc, wchar_t** argv)
 	if (onCi && argc == 2 && wcscmp(argv[1], L"--window-regression") == 0) return RunWindowRegression();
 	if (onCi && argc == 2 && wcscmp(argv[1], L"--exit-check-0") == 0) { Sleep(500); return 0; }
 	if (onCi && argc == 2 && wcscmp(argv[1], L"--exit-check-7") == 0) { Sleep(500); return 7; }
-	const bool disposableVm = argc == 7 && wcscmp(argv[6], L"--disposable-vm") == 0;
+	manualDrops = argc == 7 && wcscmp(argv[6], L"--manual-disposable-vm") == 0;
+	const bool disposableVm = manualDrops || (argc == 7 && wcscmp(argv[6], L"--disposable-vm") == 0);
 	if ((!onCi && !disposableVm) || (argc != 6 && argc != 7))
 	{
 		std::cerr << "Use the disposable CI or spare-PC diagnostic script; requires four fixtures and a private browser profile.\n";
@@ -354,7 +376,7 @@ DWORD sessionId = 0;
 	std::wcout << L"WebView2 Runtime: " << version << L'\n';
 	CoTaskMemFree(version);
 	if (!CreateProbeWindow()) { OleUninitialize(); return 2; }
-	SetTimer(window, 1, 90000, nullptr);
+	SetTimer(window, 1, manualDrops ? 600000 : 90000, nullptr);
 	HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, argv[5], nullptr,
 		Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
 			[](HRESULT created, ICoreWebView2Environment* env) -> HRESULT
@@ -379,11 +401,36 @@ DWORD sessionId = 0;
 								Fail("subscribe browser messages"); return S_OK;
 							}
 							// This isolated probe has no native write/execute bridge.
-							return view->NavigateToString(LR"HTML(<!doctype html><html><body style="min-height:100vh;background:#eee">
-<div>Disposable Windows drop probe</div><script>
-window.addEventListener('dragover', e => e.preventDefault());
+							return view->NavigateToString(LR"HTML(<!doctype html><html><body style="margin:0;padding:28px;box-sizing:border-box;min-height:100vh;background:#eee;font:18px Segoe UI,sans-serif">
+<h2>Cafe Shelf drop test</h2>
+<p id="prompt">Starting browser checks...</p>
+<p>When asked, drag one prepared item from the opened File Explorer folder into this window.
+Do not double-click the files. Wait for the next instruction after each drop.</p>
+<p id="progress" role="status">Waiting for browser readiness.</p>
+<p>The test ends after four verified drops. Closing this window cancels the test.</p>
+<script>
+const progress = document.getElementById('progress');
+chrome.webview.addEventListener('message', e => {
+ if (typeof e.data === 'string' && e.data.startsWith('next:')) {
+  document.getElementById('prompt').textContent = e.data.slice(5);
+  progress.textContent = 'Ready for the item shown above.';
+ }
+});
+let dragLogged = false;
+window.addEventListener('dragover', e => {
+ e.preventDefault();
+ e.dataTransfer.dropEffect = 'copy';
+ if (!dragLogged) {
+  dragLogged = true;
+  progress.textContent = 'Drag detected. Release the mouse to drop.';
+  chrome.webview.postMessage('event:dragover');
+ }
+});
 window.addEventListener('drop', e => {
  e.preventDefault();
+ dragLogged = false;
+ progress.textContent = 'Drop received. Checking the original Windows path...';
+ chrome.webview.postMessage('event:drop files=' + e.dataTransfer.files.length);
  try { chrome.webview.postMessageWithAdditionalObjects('drop', Array.from(e.dataTransfer.files)); }
  catch (error) { chrome.webview.postMessage('error:' + String(error)); }
 });
