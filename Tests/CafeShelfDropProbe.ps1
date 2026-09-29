@@ -45,6 +45,9 @@ try {
         & cl.exe /nologo /EHsc /W4 /WX /DNOMINMAX "$repo/Tests/RunAsStandard.cpp" /Fe:CafeShelfStandard.exe /link Advapi32.lib Shlwapi.lib
         if ($LASTEXITCODE -ne 0) { throw 'Standard-user harness compilation failed' }
 
+        & .\CafeShelfDropProbe.exe --window-regression
+        if ($LASTEXITCODE -ne 0) { throw 'Hidden-startup window regression failed' }
+
         # Publish a reviewable test kit even if this runner lacks an interactive desktop.
         $kit = Join-Path $repo 'work-package/CafeShelfDropKit'
         New-Item -ItemType Directory -Path $kit -Force | Out-Null

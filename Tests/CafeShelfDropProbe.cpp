@@ -143,6 +143,65 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
 	return DefWindowProcW(hwnd, message, wp, lp);
 }
 
+bool CreateProbeWindow()
+{
+	WNDCLASSW cls = {};
+	cls.lpfnWndProc = WindowProc;
+	cls.hInstance = GetModuleHandleW(nullptr);
+	cls.lpszClassName = L"CafeShelfDisposableDropProbe";
+	RegisterClassW(&cls);
+	window = CreateWindowW(cls.lpszClassName, L"Cafe Shelf disposable drop test",
+		WS_OVERLAPPEDWINDOW | WS_VISIBLE, 60, 60, 900, 600, nullptr, nullptr, cls.hInstance, nullptr);
+	return window != nullptr;
+}
+
+// Separate process reproduces the launcher's STARTUPINFO, before WebView2
+// or desktop input is involved. Both paths use the same window creation.
+int CheckHiddenStartup()
+{
+	STARTUPINFOW startup = {};
+	startup.cb = sizeof(startup);
+	GetStartupInfoW(&startup);
+	if (!(startup.dwFlags & STARTF_USESHOWWINDOW) || startup.wShowWindow != SW_HIDE)
+	{
+		std::cerr << "FAIL regression did not reproduce hidden startup\n";
+		return 2;
+	}
+	if (!CreateProbeWindow()) return 2;
+	const bool visible = IsWindowVisible(window) != FALSE;
+	std::cout << (visible ? "PASS" : "FAIL") << " probe window is visible after hidden process startup\n";
+	DestroyWindow(window);
+	return visible ? 0 : 1;
+}
+
+int RunWindowRegression()
+{
+	wchar_t program[32768] = {};
+	if (!GetModuleFileNameW(nullptr, program, ARRAYSIZE(program))) return 2;
+	std::wstring command = L"\"" + std::wstring(program) + L"\" --window-check";
+	STARTUPINFOW startup = {};
+	startup.cb = sizeof(startup);
+	startup.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+	startup.wShowWindow = SW_HIDE;
+	startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+	startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+	startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+	PROCESS_INFORMATION child = {};
+	if (!CreateProcessW(program, &command[0], nullptr, nullptr, TRUE, 0, nullptr, nullptr, &startup, &child))
+		return 2;
+	CloseHandle(child.hThread);
+	DWORD exitCode = 2;
+	if (WaitForSingleObject(child.hProcess, 10000) == WAIT_OBJECT_0)
+		GetExitCodeProcess(child.hProcess, &exitCode);
+	else
+	{
+		TerminateProcess(child.hProcess, 2);
+		WaitForSingleObject(child.hProcess, 5000);
+	}
+	CloseHandle(child.hProcess);
+	return static_cast<int>(exitCode);
+}
+
 HRESULT Receive(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args)
 {
 	LPWSTR message = nullptr;
@@ -214,6 +273,8 @@ int wmain(int argc, wchar_t** argv)
 	std::wcout << std::unitbuf;
 	wchar_t ci[8] = {};
 	const bool onCi = GetEnvironmentVariableW(L"GITHUB_ACTIONS", ci, 8) && wcscmp(ci, L"true") == 0;
+	if (onCi && argc == 2 && wcscmp(argv[1], L"--window-check") == 0) return CheckHiddenStartup();
+	if (onCi && argc == 2 && wcscmp(argv[1], L"--window-regression") == 0) return RunWindowRegression();
 	const bool disposableVm = argc == 7 && wcscmp(argv[6], L"--disposable-vm") == 0;
 	if ((!onCi && !disposableVm) || (argc != 6 && argc != 7))
 	{
@@ -277,14 +338,7 @@ DWORD sessionId = 0;
 	if (FAILED(versionResult)) { Fail("WebView2 Runtime unavailable", versionResult); OleUninitialize(); return 1; }
 	std::wcout << L"WebView2 Runtime: " << version << L'\n';
 	CoTaskMemFree(version);
-	WNDCLASSW cls = {};
-	cls.lpfnWndProc = WindowProc;
-	cls.hInstance = GetModuleHandleW(nullptr);
-	cls.lpszClassName = L"CafeShelfDisposableDropProbe";
-	RegisterClassW(&cls);
-	window = CreateWindowW(cls.lpszClassName, L"Cafe Shelf disposable drop test",
-		WS_OVERLAPPEDWINDOW | WS_VISIBLE, 60, 60, 900, 600, nullptr, nullptr, cls.hInstance, nullptr);
-	if (!window) { OleUninitialize(); return 2; }
+	if (!CreateProbeWindow()) { OleUninitialize(); return 2; }
 	SetTimer(window, 1, 90000, nullptr);
 	HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, argv[5], nullptr,
 		Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(

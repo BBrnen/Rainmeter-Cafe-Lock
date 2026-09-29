@@ -66,3 +66,9 @@ Run 36641339289 / job 109654062121 shows 49/49 protocol and 25/25 host-policy ch
 Next required evidence: run the packaged diagnostic normally on the owner's offered spare PC/VM and obtain its real-drop results. Do not invent a green result, silently waive drops, or treat a COM-launch failure as a product compatibility pass. If the browser drop path fails on that desktop, use the already approved native OLE drop-surface fallback and repeat all four categories before later UI work. Existing user approval still covers the full implementation; no renewed design approval is needed.
 
 The diagnostic now verifies its own window is under the target point before sending mouse input. Its package records the tested source revision, executable SHA-256, source, instructions, dependency manifest and discovered SDK notices. The main Windows job runs git diff --check against the PR base; this is CI evidence, not a claim about the untouched local checkout.
+
+## Manual probe hidden-window investigation
+
+The owner reproduced the covered-window refusal on a normal standard-user desktop (WebView2 154.0.4258.37); the private profile and fabricated-file rejection passed. Repositioning other windows did not help. Source inspection found that the script launches with WindowStyle Hidden and the probe relies solely on WS_VISIBLE at creation. Microsoft documents that initial visibility can be overridden by STARTUPINFO (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow). Add a separate-process Windows regression using the same creation function and actual SW_HIDE startup; establish RED before changing visibility. Do not remove the target hit-test safeguard or infer drop success.
+
+The full existing x64 build, policy, password, standard-user, ShelfSuite and installer regressions passed at 12b26f1 in run 36641617591 / job 109654953682. The new editor job still fails at CI WebView controller creation; no new feature completion is claimed.
