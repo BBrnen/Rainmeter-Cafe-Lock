@@ -7,6 +7,9 @@ if (!$onCi -and !$DisposableVM) { throw 'Use this only on a disposable CI deskto
 function Start-ProbeProcess {
     param([string]$Program, [string[]]$Arguments, [string]$OutLog, [string]$ErrLog)
     $child = Start-Process -FilePath $Program -ArgumentList $Arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
+    # Windows PowerShell 5.1 loses redirected-process exit codes without this
+    # retained handle. Keep it before waiting (PowerShell issue 5421).
+    $null = $child.Handle
     return $child
 }
 if ($ProcessRegression) {
@@ -125,6 +128,7 @@ try {
             throw 'Real drop probe exceeded 120 seconds; this desktop has not proved drag/drop.'
         }
         $probe.Refresh()
+        if ($null -eq $probe.ExitCode) { throw 'Diagnostic exit code unavailable; do not treat this run as a pass.' }
         if ($probe.ExitCode -ne 0) { throw "Real Windows drop probe failed ($($probe.ExitCode)); keep the diagnostic logs." }
         Write-Host 'PASS: all four real Windows drops preserved their original paths.'
     } finally {
