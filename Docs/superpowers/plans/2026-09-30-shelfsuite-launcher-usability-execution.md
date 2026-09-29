@@ -16,5 +16,18 @@ Unmodified approved plan revision 7715d631d2a2bbac6c1556281a1ca792327c1256 passe
 
 ## Task status
 
-1. Session/protocol: regression tests prepared; expected RED run pending.
+1. Session/protocol: RED observed: 49 checks, 17 expected assertion failures at 3039f337e744db32a6c793fac8762c3dafb01d3d, run 36638064658 / job 109643475043. Compilation succeeded. Session/protocol implementation prepared; GREEN pending.
 2–7. Not started.
+
+## Test infrastructure correction
+
+The first test compilation (9a8d9da, run 36637946440) found MSVC C4310 in the invalid UTF-8 fixture's signed-char cast. Commit 3039f33 uses an explicit byte escape instead; no compiler warning was suppressed. Only the following assertion run counts as RED evidence.
+
+## Interface preflight
+
+- Tasks 1/2/5/6: native Ticket and live lock state must accompany every async operation, not values from JSON. Session checks do not independently confer Maintenance authorization.
+- Tasks 2/3/4: SelectedFile comes from native pick/drop; pages cannot turn arbitrary strings into selected files.
+- Tasks 4/5/6: icon preparation returns bytes only; Storage owns all writes. Cancel drops memory state.
+- Tasks 5/6: typed EditBatch and source versions are required before saveEdits is enabled.
+- Tasks 2/7: SDK restore and optional Runtime packaging stay distinct; missing Runtime must not break ordinary launchers.
+- Ruling: record progress in this committed execution document while the local workspace helper cannot run. This preserves handoff evidence without claiming local execution; cost is extra documentation commits.
