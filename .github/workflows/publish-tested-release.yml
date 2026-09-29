@@ -1,0 +1,54 @@
+name: Publish tested Cafe Lock release
+
+on:
+  push:
+    branches:
+      - release-v4.5.26.3894-cafe-lock.1
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: github.repository == 'BBrnen/Rainmeter-Cafe-Lock'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the successful Stage 6 installer artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh run download 36514534281
+          --repo "$GITHUB_REPOSITORY"
+          --name Rainmeter-Cafe-Lock-stage6-installer-x64
+          --dir release
+
+      - name: Verify packaged checksums
+        working-directory: release
+        run: sha256sum --check SHA256SUMS.txt
+
+      - name: Publish the permanent GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v4.5.26.3894-cafe-lock.1
+          TARGET: 69323daa7adbe5539803cb13f87fdb80c9560572
+        shell: bash
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to replace it."
+            exit 1
+          fi
+          cat > release-notes.md <<'EOF'
+          First tested release of Rainmeter Cafe Lock, based on official Rainmeter 4.5.26.3894.
+
+          Cafe Lock starts locked when a Windows user signs in. Locked mode prevents skin dragging, modifier-key drag bypasses, Rainmeter context menus, Manage/Edit/Unload operations, configuration writes, layout replacement, and tray management. Normal skin launcher actions, hover effects, tabs, Lua updates, and application launches remain available.
+
+          Maintenance Mode uses a local password and unlocks only the current Rainmeter process. Lock Now immediately restores Locked Mode, and every Rainmeter restart starts locked.
+
+          ShelfSuite v2.1 was compatibility-tested unchanged at revision d4f186ba0b5c262c7559b80841132f5fd3884f3c. Launcher icons, tabs, hover effects, and application launches work while locked; its configurator is blocked while locked and works after password unlock.
+
+          The x64 installer was tested for standard-user startup, install, upgrade, refusal to replace running binaries, and safe uninstall. It is unsigned, so Windows may show an Unknown publisher warning.
+
+          Download the Setup.exe for installation. SHA256SUMS.txt verifies the installer and matching source archive.
+          EOF
+          gh release create "$TAG" release/*             --repo "$GITHUB_REPOSITORY"             --target "$TARGET"             --title "Rainmeter Cafe Lock 4.5.26.3894-1"             --notes-file release-notes.md             --latest
