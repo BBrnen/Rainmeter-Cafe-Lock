@@ -11,6 +11,21 @@ permissions:
   contents: read
 
 jobs:
+  cafe-shelf-core:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out editor test sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Test editor protocol and revocation
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite Protocol
+
   cafe-lock-x64:
     runs-on: windows-2022
     timeout-minutes: 45
