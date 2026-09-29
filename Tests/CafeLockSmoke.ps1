@@ -136,13 +136,21 @@ function Password-Dialog($title) {
   Wait-For { [LockNative]::FindWindow('#32770',$title) -ne [IntPtr]::Zero } $title
   return [LockNative]::FindWindow('#32770',$title)
 }
-function Submit-Password($dialog, $password, $confirm = '', $current = '') {
-  if (-not [LockNative]::SetDlgItemText($dialog,100,$password)) { throw "Password field unavailable" }
-  [void][LockNative]::SetDlgItemText($dialog,101,$confirm)
-  [void][LockNative]::SetDlgItemText($dialog,102,$current)
-  # Queue the click on Rainmeter's UI thread. Synchronous cross-process sends
-  # retain the remote sender context, which password edit controls protect against.
+function Type-PasswordField($dialog, $id, [string]$value) {
+  $edit = [LockNative]::GetDlgItem($dialog,$id)
+  if ($edit -eq [IntPtr]::Zero) { if ($value.Length) { throw 'Missing password input' }; return }
+  [void][LockNative]::SetDlgItemText($dialog,$id,'')
+  foreach ($character in $value.ToCharArray()) {
+    [void][LockNative]::PostMessage($edit,0x102,[IntPtr]([int]$character),[IntPtr]::Zero)
+  }
+}
+function Submit-Password($dialog, [string]$password, [string]$confirm = '', [string]$current = '') {
+  if (-not $password.Length) { throw 'Test fixture supplied an empty password' }
+  Type-PasswordField $dialog 100 $password
+  Type-PasswordField $dialog 101 $confirm
+  Type-PasswordField $dialog 102 $current
   [void][LockNative]::SetDlgItemText($dialog,203,'')
+  # Characters and the click share Rainmeter's UI queue, like ordinary typing.
   [void][LockNative]::PostMessage($dialog,0x111,[IntPtr]1,[IntPtr]::Zero)
   Wait-For {
     if (-not [LockNative]::IsWindow($dialog)) { return $true }
