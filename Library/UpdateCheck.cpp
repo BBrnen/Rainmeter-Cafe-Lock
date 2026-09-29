@@ -63,8 +63,9 @@ Updater& Updater::GetInstance()
 
 void Updater::CheckForUpdates(bool download)
 {
-	m_DownloadInstaller = download;
-	_beginthread(GetStatus, 0, this);
+	// Upstream installers would replace this fork with ordinary Rainmeter.
+	// Cafe Lock updates are distributed through the project's reviewed installer.
+	(void)download;
 }
 
 void Updater::GetLanguageStatus()
