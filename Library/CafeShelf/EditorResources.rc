@@ -1,0 +1,4 @@
+// Trusted application-owned assets. Never substitute installed skin HTML here.
+"CAFE_SHELF_HTML" RCDATA "CafeShelf\\UI\\configurator.html"
+"CAFE_SHELF_JS" RCDATA "CafeShelf\\UI\\configurator.js"
+"CAFE_SHELF_CSS" RCDATA "CafeShelf\\UI\\configurator.css"

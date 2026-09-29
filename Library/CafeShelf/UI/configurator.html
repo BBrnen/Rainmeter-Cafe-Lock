@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ShelfSuite — Maintenance Mode</title>
+<link rel="stylesheet" href="/app.css">
+<script defer src="/app.js"></script>
+</head>
+<body>
+<header><h1>ShelfSuite</h1><span>Maintenance Mode</span><button id="lock">Lock Now</button></header>
+<main>
+<p>Choose a launcher or custom icon. Configuration saving is unavailable in this preview.</p>
+<section id="launcher" class="drop" tabindex="0" aria-label="Launcher drop area">
+<h2>Launcher</h2><p>Drop a shortcut, application, folder or file here.</p>
+<button id="browse">Browse for launcher/file</button>
+<button id="folder">Browse for folder</button>
+</section>
+<section id="icon" class="drop" tabindex="0" aria-label="Custom icon drop area">
+<h2>Custom icon</h2><p>Drop a PNG, ICO, application or shortcut here.</p>
+<button id="browseIcon">Browse for custom icon</button>
+</section>
+<p id="result" role="status"></p>
+<button id="cancel">Cancel selections</button>
+</main>
+</body>
+</html>

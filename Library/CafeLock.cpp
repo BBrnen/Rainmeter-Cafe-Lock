@@ -1,6 +1,7 @@
 // Rainmeter Cafe Lock. GNU GPL v2 or later; see LICENSE.
 #include "StdAfx.h"
 #include "CafeLock.h"
+#include "CafeShelf/Host.h"
 #include "../Common/CafePassword.h"
 #include "Rainmeter.h"
 #include "Skin.h"
@@ -122,6 +123,7 @@ void CafeLock::LockNow()
 	// Stop automatic game-mode transitions; keep the currently configured scene.
 	if (!IsLocked()) GetGameMode().SuspendForCafeLock();
 	if (session) session->Lock();
+	CafeShelf::RevokeAndClose();
 	if (passwordDialog) passwordDialog->Close();
 	EndMenu();
 	ReleaseCapture();
@@ -139,6 +141,7 @@ void CafeLock::LockNow()
 void CafeLock::Shutdown()
 {
 	if (session) session->Lock();
+	CafeShelf::RevokeAndClose();
 	if (passwordDialog) passwordDialog->Close();
 }
 
@@ -155,4 +158,17 @@ void CafeLock::ShowLockedTrayMenu(HWND owner)
 	DestroyMenu(menu);
 	PostMessage(owner, WM_NULL, 0, 0);
 	if (chosen == MaintenanceCommand) RequestMaintenance();
+}
+
+bool CafeShelf::TryOpen(const wchar_t* file)
+{
+	const auto& skinPath = GetRainmeter().GetSkinPath();
+	if (!CafeLock::IsShelfSuiteConfigurator(file, skinPath)) return false;
+	// Always consume this path; never fall back to an externally writable page.
+	if (!CafeLock::IsLocked())
+	{
+		OpenEditor(GetRainmeter().GetModuleInstance(), skinPath + L"Shelf Suite\\",
+			CafeLock::IsLocked, CafeLock::LockNow);
+	}
+	return true;
 }
