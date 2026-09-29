@@ -137,7 +137,7 @@ function Password-Dialog($title) {
   return [LockNative]::FindWindow('#32770',$title)
 }
 function Submit-Password($dialog, $password, $confirm = '', $current = '') {
-  [void][LockNative]::SetDlgItemText($dialog,100,$password)
+  if (-not [LockNative]::SetDlgItemText($dialog,100,$password)) { throw "Password field unavailable" }
   [void][LockNative]::SetDlgItemText($dialog,101,$confirm)
   [void][LockNative]::SetDlgItemText($dialog,102,$current)
   [void][LockNative]::Send($dialog,0x111,1,0)
@@ -333,7 +333,15 @@ try {
   Wait-For { $process.HasExited } 'Windows confirmed sign-out closes locked Rainmeter'
   Write-Output 'PASS: shutdown/restart/logoff queries accepted; cancelled shutdown preserved session; confirmed logoff exits while locked.'
 
-} catch {
+ } catch {
+  foreach ($title in @('Create Cafe Lock Password','Enter Cafe Lock Password','Change Cafe Lock Password')) {
+    $failedDialog = [LockNative]::FindWindow('#32770',$title)
+    if ($failedDialog -ne [IntPtr]::Zero) {
+      $errorText = [Text.StringBuilder]::new(256)
+      [void][LockNative]::GetDlgItemText($failedDialog,203,$errorText,256)
+      Write-Output "Password dialog diagnostic (no field contents): $errorText; verifier file exists: $(Test-Path "$root/CafeLock.ini")"
+    }
+  }
   Get-ChildItem $root -Filter '*.log' -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName -Tail 50 }
   throw
 } finally {
