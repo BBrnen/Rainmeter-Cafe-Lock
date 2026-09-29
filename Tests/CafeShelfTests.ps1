@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'All')]
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'All')]
     [string]$Suite = 'Protocol'
 )
 $ErrorActionPreference = 'Stop'
@@ -9,8 +9,8 @@ $output = Join-Path $repo 'work-package/CafeShelfTests'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
-    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host') } else { @($Suite) }
-    if ($tests -contains 'Selection' -or $tests -contains 'Host') {
+    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser') } else { @($Suite) }
+    if ($tests -contains 'Selection' -or $tests -contains 'Host' -or $tests -contains 'Browser') {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
     }
@@ -22,6 +22,7 @@ try {
             Controller = 'CafeShelfController.cpp'
             Selection = 'CafeShelfSelection.cpp'
             Host = 'CafeShelfHostHarness.cpp'
+            Browser = 'CafeShelfBrowser.cpp'
         }[$test]
         $compilerArgs = @(
             '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
@@ -51,7 +52,13 @@ try {
             [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
             $arguments = @($shortcut, $folder)
         }
-        if ($test -eq 'Host') {
+        if ($test -eq 'Host' -or $test -eq 'Browser') {
+            if ($test -eq 'Browser') {
+                if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Real browser integration requires a disposable CI desktop.' }
+                & rc.exe /nologo "/I$repo/Library" /foCafeShelfEditor.res "$repo/Library/CafeShelf/EditorResources.rc"
+                if ($LASTEXITCODE -ne 0) { throw 'Embedded editor resource compilation failed' }
+                $compilerArgs += 'CafeShelfEditor.res'
+            }
             $compilerArgs += @(
                 '/MT', "/I$sdk/build/native/include",
                 "$repo/Library/CafeShelf/Host.cpp", "$repo/Library/CafeShelf/Selection.cpp",
