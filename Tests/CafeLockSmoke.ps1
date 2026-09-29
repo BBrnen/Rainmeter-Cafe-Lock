@@ -160,10 +160,11 @@ function Submit-Password($dialog, [string]$password, [string]$confirm = '', [str
   } 'password submission completed'
 
 }
-function Assert-PasswordError($dialog) {
+function Assert-PasswordError($dialog, $expected = '') {
   $text = [Text.StringBuilder]::new(256)
   [void][LockNative]::GetDlgItemText($dialog,203,$text,256)
   if (-not [LockNative]::IsWindow($dialog) -or $text.Length -eq 0) { throw 'Expected password error with dialog still open' }
+  if ($expected -and $text.ToString() -ne $expected) { throw "Unexpected validation message: $text" }
 }
 function Cancel-Password($title) {
   $dialog = Password-Dialog $title
@@ -171,6 +172,12 @@ function Cancel-Password($title) {
 }
 $password = 'Runtime Cafe password first!'
 $newPassword = 'Runtime Cafe password changed!'
+function Assert-NoPlaintext {
+  foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
+    $content = Get-Content -LiteralPath $file.FullName -Raw
+    if ($content.Contains($password) -or $content.Contains($newPassword)) { throw 'Plaintext password found in configuration/logs' }
+  }
+}
 $process = $null
 try {
   $process = Start-Process (Join-Path $build 'Rainmeter.exe') -ArgumentList "`"$ini`"" -PassThru
@@ -260,7 +267,7 @@ try {
     [void][LockNative]::Send($tray,0x111,4090,0)
     $dialog = Password-Dialog 'Create Cafe Lock Password'
     Submit-Password $dialog $password 'mismatch'
-    Assert-PasswordError $dialog
+    Assert-PasswordError $dialog 'Passwords do not match.'
     if (Test-Path "$root/CafeLock.ini") { throw 'Mismatch persisted a password' }
     Submit-Password $dialog $password $password
     Wait-For { -not [LockNative]::IsWindow($dialog) } 'creation unlock'
@@ -274,6 +281,7 @@ try {
     Wait-For { [LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero } 'maintenance Manage dialog'
     [LockNative]::Bang($control,'!Manage Settings')
     $manage = [LockNative]::FindWindow('#32770','Manage Rainmeter')
+    Wait-For { [LockNative]::Child($manage,'Change password...') -ne [IntPtr]::Zero } 'Cafe Lock settings controls'
     $change = [LockNative]::Child($manage,'Change password...')
     if ($change -eq [IntPtr]::Zero) { throw 'Cafe Lock settings section missing' }
     if ([LockNative]::Child($manage,'Mode: Maintenance (editing unlocked)') -eq [IntPtr]::Zero) { throw 'Maintenance status missing' }
@@ -322,6 +330,7 @@ try {
     Wait-For { -not [LockNative]::IsWindow($peer) } 'maintenance unload'
     [LockNative]::Bang($control,'!ActivateConfig LockPeer Test.ini')
     Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\LockPeer\Test.ini") -ne [IntPtr]::Zero } 'maintenance activate'
+    Assert-NoPlaintext
     [LockNative]::Bang($control,'!Quit')
     Wait-For { $process.HasExited } 'maintenance normal exit'
     $process = Start-Process (Join-Path $build 'Rainmeter.exe') -ArgumentList "`"$ini`"" -PassThru
@@ -333,12 +342,13 @@ try {
     [LockNative]::Bang($control,'!Move 450 450 LockTest')
     Start-Sleep -Milliseconds 300
     if ((Position $window) -ne $beforeRestart) { throw 'Restart retained maintenance authorization' }
+    foreach ($command in @('!Manage','!EditSkin LockTest Test.ini')) {
+      [LockNative]::Bang($control,$command)
+      Cancel-Password 'Enter Cafe Lock Password'
+    }
     Write-Output "PASS: native password setup/mismatch/unlock/change/old rejected/new accepted; Manage/Edit/write; Lock Now; repeat authorization; Unload/Activate; process restart locked. Standard-user pass: $StandardUser"
   }
-  foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
-    $content = Get-Content -LiteralPath $file.FullName -Raw
-    if ($content.Contains($password) -or $content.Contains($newPassword)) { throw 'Plaintext password found in configuration/logs' }
-  }
+  Assert-NoPlaintext
   # Exercise the documented Windows protocol without signing out/rebooting the runner.
   foreach ($reason in @(0,2147483648,1073741824)) {
     foreach ($handle in @($window,$tray,$control)) {
