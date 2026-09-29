@@ -18,8 +18,11 @@ NSIS 3.11. GitHub Actions performs those steps and tests the result.
 4. Right-click its tray icon, choose Unlock / Enter Maintenance Mode, and create
    the local password before customer use. In Maintenance, configure skins and
    ShelfSuite using normal Rainmeter controls. ShelfSuite is not bundled or modified.
-5. Select Lock Now. Restart always starts locked. To start automatically at sign-in,
-   copy the Start menu shortcut into that cafe account's shell:startup folder.
+5. Select Lock Now. Setup enables automatic startup for all Windows users via the
+   shared Startup folder. It starts locked after sign-in, not before the login
+   screen, and runs as that user. Configure the password in each cafe account before
+   customer use. An administrator can remove the shortcut from shell:common startup
+   to disable automatic startup; running Setup again restores it.
 
 The default Rainmeter skins directory is retained for skin compatibility. Explicit
 INI-path launches still work. To migrate an earlier review profile, close Rainmeter
@@ -52,7 +55,7 @@ so they cannot replace Cafe Lock with ordinary Rainmeter. Use this project's
 reviewed Setup.exe for updates.
 
 Uninstall via Windows Apps or Uninstall.exe. Only packaged files, the Cafe Lock
-Start menu shortcut and its own uninstall registration are removed. User profiles,
+Start menu/sign-in shortcuts and its own uninstall registration are removed. User profiles,
 passwords, skins and unknown files are retained. No recursive profile deletion or
 file-association takeover is performed.
 

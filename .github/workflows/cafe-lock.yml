@@ -2,9 +2,9 @@ name: Build and test Cafe Lock
 
 on:
   push:
-    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer]
+    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer, stage-6-compatibility]
   pull_request:
-    branches: [main, stage-2-baseline-build, stage-3-cafe-lock, stage-4-maintenance]
+    branches: [main, stage-2-baseline-build, stage-3-cafe-lock, stage-4-maintenance, stage-5-installer]
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
             'Official baseline: 5a124b6a09e2f7f67f8be9232718c489100e6173'
             "Build commit: $env:GITHUB_SHA"
             'Configuration: Release x64; Visual Studio 2022; upstream Build.bat'
-            'Stage 5 review build: password Maintenance Mode; dedicated x64 installer.'
+            'Stage 6 review build: password Maintenance Mode; dedicated x64 installer.'
           ) | Set-Content x64-Release/CAFE-LOCK-BUILD.txt
           Get-ChildItem x64-Release -Recurse -File |
             Where-Object { $_.FullName -notmatch '[\\/]Obj[\\/]' -and $_.Extension -in '.exe', '.dll' } |
@@ -80,7 +80,7 @@ jobs:
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Rainmeter-Cafe-Lock-stage5-x64
+          name: Rainmeter-Cafe-Lock-stage6-x64
           path: |
             x64-Release
             !x64-Release/Obj
@@ -101,7 +101,7 @@ jobs:
       - name: Upload installer, matching source and checksums
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Rainmeter-Cafe-Lock-stage5-installer-x64
+          name: Rainmeter-Cafe-Lock-stage6-installer-x64
           path: dist
           if-no-files-found: error
           retention-days: 30

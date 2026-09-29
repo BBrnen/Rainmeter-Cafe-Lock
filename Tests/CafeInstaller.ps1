@@ -4,6 +4,7 @@ if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Installer integration test runs onl
 $repo = (Resolve-Path "$PSScriptRoot/..").Path
 $installed = Join-Path $env:ProgramW6432 'Rainmeter Cafe Lock'
 $profile = Join-Path $env:APPDATA 'Rainmeter Cafe Lock'
+$startupLink = Join-Path ([Environment]::GetFolderPath('CommonStartup')) 'Rainmeter Cafe Lock.lnk'
 $setup = Join-Path $repo 'dist/Rainmeter-Cafe-Lock-4.5.26.3894-x64-Setup.exe'
 function Run-Setup {
  $p = Start-Process $setup -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
@@ -17,8 +18,12 @@ if ($Standard) {
  $denied = $false
  try { $f = [IO.File]::Open("$installed/Rainmeter.dll",[IO.FileMode]::Open,[IO.FileAccess]::Write); $f.Dispose() } catch [UnauthorizedAccessException] { $denied = $true }
  if (-not $denied) { throw 'Standard user could overwrite Rainmeter.dll' }
- # Test normal Start-menu-style launch without an explicit INI override.
- $p = Start-Process "$installed/Rainmeter.exe" -WindowStyle Hidden -PassThru
+ # Verify the installed sign-in entry, then launch that actual shortcut as a standard user.
+ $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($startupLink)
+ if ($shortcut.TargetPath -ne "$installed\Rainmeter.exe" -or $shortcut.Arguments) { throw 'Unexpected startup shortcut target/arguments' }
+ $flags = [BitConverter]::ToUInt32([IO.File]::ReadAllBytes($startupLink),20)
+ if (($flags -band 0x2000) -ne 0) { throw 'Startup shortcut requests administrator elevation' }
+ $p = Start-Process $startupLink -PassThru
  try {
   $deadline = [DateTime]::UtcNow.AddSeconds(20)
   while (-not (Test-Path "$profile/Rainmeter.ini")) {
@@ -29,7 +34,7 @@ if ($Standard) {
   if ($p.HasExited) { throw 'Installed default runtime exited' }
   'preserve me' | Set-Content "$profile/installer-preservation-test.txt"
   # Check that the installer refuses a running DLL rather than killing the app.
-  Write-Output 'PASS: protected program files; installed standard-user default-profile launch.'
+  Write-Output 'PASS: protected program files; actual sign-in shortcut launch as standard user; default-profile startup.'
  } finally { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } }
  & "$env:ProgramFiles/PowerShell/7/pwsh.exe" -NoProfile -File "$repo/Tests/CafeLockSmoke.ps1" -BuildDirectory $installed -StandardUser -Maintenance
  if ($LASTEXITCODE -ne 0) { throw 'Installed password/runtime regression failed' }
@@ -46,6 +51,7 @@ $key = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe
 if (-not (Test-Path $key)) { throw 'Uninstall registration missing' }
 $link = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Rainmeter Cafe Lock/Rainmeter Cafe Lock.lnk'
 if (-not (Test-Path $link)) { throw 'Start menu shortcut missing' }
+if (-not (Test-Path $startupLink)) { throw 'Sign-in startup shortcut missing' }
 & "$repo/RunAsStandard.exe" "$env:ProgramFiles/PowerShell/7/pwsh.exe" -NoProfile -File "$PSCommandPath" -Standard
 if ($LASTEXITCODE -ne 0) { throw 'Installed standard-user tests failed' }
 $before = Get-FileHash "$profile/installer-preservation-test.txt"
@@ -57,6 +63,7 @@ try {
  if ($attempt.ExitCode -ne 1618 -or $p.HasExited) { throw 'Running-instance update refusal failed' }
 } finally { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } }
 Run-Setup
+if (-not (Test-Path $startupLink)) { throw 'Upgrade lost automatic startup' }
 if ((Get-FileHash "$profile/installer-preservation-test.txt").Hash -ne $before.Hash) { throw 'Upgrade modified profile data' }
 # Unknown installation files are preserved by the generated uninstall manifest.
 'preserve unknown file' | Set-Content "$installed/unknown-test.txt"
@@ -65,6 +72,7 @@ if ($uninstall.ExitCode -ne 0) { throw 'Uninstall failed' }
 if (Test-Path "$installed/Rainmeter.exe") { throw 'Uninstall left the application binary' }
 if (Test-Path $key) { throw 'Uninstall left registration' }
 if (Test-Path $link) { throw 'Uninstall left shortcut' }
+if (Test-Path $startupLink) { throw 'Uninstall left automatic startup' }
 if (-not (Test-Path "$installed/unknown-test.txt")) { throw 'Uninstall removed an unknown file' }
 if ((Get-FileHash "$profile/installer-preservation-test.txt").Hash -ne $before.Hash) { throw 'Uninstall removed profile data' }
 Write-Output 'PASS: install; standard-user runtime/password regressions; running update refusal; upgrade; safe uninstall; profile preservation.'
