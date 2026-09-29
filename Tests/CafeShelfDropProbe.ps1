@@ -33,14 +33,16 @@ try {
     )
     & cl.exe @compilerArgs
     if ($LASTEXITCODE -ne 0) { throw 'Drop probe compilation failed' }
+    & cl.exe /nologo /EHsc /W4 /WX /DNOMINMAX "$repo/Tests/RunAsStandard.cpp" /Fe:CafeShelfStandard.exe /link Advapi32.lib Shlwapi.lib
+    if ($LASTEXITCODE -ne 0) { throw 'Standard-user harness compilation failed' }
     $outLog = Join-Path $directory 'probe.stdout.log'
     $errLog = Join-Path $directory 'probe.stderr.log'
-    $arguments = @($link, $exe, $folder, $document, (Join-Path $directory 'BrowserProfile')) |
+    $arguments = @((Join-Path $directory 'CafeShelfDropProbe.exe'), $link, $exe, $folder, $document, (Join-Path $directory 'BrowserProfile')) |
         ForEach-Object { '"' + $_ + '"' }
-    $probe = Start-Process -FilePath (Join-Path $directory 'CafeShelfDropProbe.exe') -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $probe = Start-Process -FilePath (Join-Path $directory 'CafeShelfStandard.exe') -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
     try {
         if (!$probe.WaitForExit(120000)) {
-            Stop-Process -Id $probe.Id -Force
+            & taskkill.exe /PID $probe.Id /T /F | Out-Null
             throw 'Real drop probe exceeded 120 seconds; this desktop has not proved drag/drop.'
         }
         $probe.Refresh()

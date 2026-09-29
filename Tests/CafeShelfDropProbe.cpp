@@ -213,6 +213,26 @@ int wmain(int argc, wchar_t** argv)
 		std::cerr << "Disposable CI only; requires four fixtures and a private browser profile.\n";
 		return 2;
 	}
+	HANDLE token = nullptr;
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return 2;
+	DWORD size = 0;
+	GetTokenInformation(token, TokenIntegrityLevel, nullptr, 0, &size);
+	std::vector<BYTE> labelBytes(size);
+	if (!size || !GetTokenInformation(token, TokenIntegrityLevel, labelBytes.data(), size, &size))
+	{
+		CloseHandle(token);
+		return 2;
+	}
+	const auto label = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(labelBytes.data());
+	const auto sid = label->Label.Sid;
+	const auto integrity = *GetSidSubAuthority(sid, *GetSidSubAuthorityCount(sid) - 1);
+	CloseHandle(token);
+	std::cout << "Probe integrity RID=" << integrity << '\n';
+	if (integrity >= SECURITY_MANDATORY_HIGH_RID)
+	{
+		std::cerr << "Real drag/drop must be tested as a standard user.\n";
+		return 2;
+	}
 	for (int i = 1; i <= 4; ++i) fixtures.emplace_back(argv[i]);
 	if (FAILED(OleInitialize(nullptr))) return 2;
 	LPWSTR version = nullptr;
