@@ -1,8 +1,35 @@
-param([switch]$DisposableVM)
+param([switch]$DisposableVM, [switch]$ProcessRegression, [string]$ProbeExe)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $onCi = $env:GITHUB_ACTIONS -eq 'true'
 if (!$onCi -and !$DisposableVM) { throw 'Use this only on a disposable CI desktop or explicitly selected spare PC/VM.' }
+
+function Start-ProbeProcess {
+    param([string]$Program, [string[]]$Arguments, [string]$OutLog, [string]$ErrLog)
+    $child = Start-Process -FilePath $Program -ArgumentList $Arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
+    return $child
+}
+if ($ProcessRegression) {
+    if (!$onCi) { throw 'Process regression is CI-only.' }
+    foreach ($expected in @(0, 7)) {
+        $stem = Join-Path $env:RUNNER_TEMP ("CafeShelfExit-" + [guid]::NewGuid().ToString('N'))
+        $child = Start-ProbeProcess -Program $ProbeExe -Arguments @("--exit-check-$expected") -OutLog "$stem.out" -ErrLog "$stem.err"
+        try {
+            if (!$child.WaitForExit(10000)) {
+                & taskkill.exe /PID $child.Id /T /F | Out-Null
+                throw 'Process regression timed out'
+            }
+            $child.Refresh()
+            $observed = $child.ExitCode
+            if ($null -eq $observed -or $observed -ne $expected) {
+                throw "FAIL Windows PowerShell exit code: expected $expected, observed [$observed]"
+            }
+            Write-Host "PASS Windows PowerShell preserves exit code $expected"
+        } finally { $child.Dispose() }
+    }
+    exit 0
+}
+
 if (!$onCi) {
     Write-Host 'This test moves the mouse in its own test window. Use a spare PC/VM.'
     Write-Host 'It creates temporary fixtures only; it does not change Rainmeter or ShelfSuite.'
@@ -48,6 +75,10 @@ try {
         & .\CafeShelfDropProbe.exe --window-regression
         if ($LASTEXITCODE -ne 0) { throw 'Hidden-startup window regression failed' }
 
+        # The downloadable kit runs under built-in Windows PowerShell 5.1.
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -ProcessRegression -ProbeExe (Join-Path $directory 'CafeShelfDropProbe.exe')
+        if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell process regression failed' }
+
         # Publish a reviewable test kit even if this runner lacks an interactive desktop.
         $kit = Join-Path $repo 'work-package/CafeShelfDropKit'
         New-Item -ItemType Directory -Path $kit -Force | Out-Null
@@ -87,7 +118,7 @@ try {
         $probeArguments += '--disposable-vm'
     }
     $quotedArguments = $probeArguments | ForEach-Object { '"' + $_ + '"' }
-    $probe = Start-Process -FilePath $program -ArgumentList $quotedArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $probe = Start-ProbeProcess -Program $program -Arguments $quotedArguments -OutLog $outLog -ErrLog $errLog
     try {
         if (!$probe.WaitForExit(120000)) {
             & taskkill.exe /PID $probe.Id /T /F | Out-Null

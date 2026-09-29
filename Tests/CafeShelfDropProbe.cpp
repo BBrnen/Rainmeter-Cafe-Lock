@@ -85,7 +85,12 @@ void RunDrop(const std::wstring& path)
 	POINT point = {350, 250};
 	ClientToScreen(window, &point);
 	std::cout << "Focusing target window\n";
-	SetForegroundWindow(window);
+	const auto activated = SetForegroundWindow(window);
+	const auto hit = WindowFromPoint(point);
+	const auto root = GetAncestor(hit, GA_ROOT);
+	std::cout << "Target visible=" << IsWindowVisible(window) << ", minimized=" << IsIconic(window) <<
+		", activation accepted=" << activated << ", target=" << window << ", hit=" << hit <<
+		", hit root=" << root << ", foreground=" << GetForegroundWindow() << '\n';
 	if (!SetCursorPos(point.x, point.y)) { Fail("no input desktop cursor access", HRESULT_FROM_WIN32(GetLastError())); return; }
 	if (GetAncestor(WindowFromPoint(point), GA_ROOT) != window)
 	{
@@ -152,7 +157,15 @@ bool CreateProbeWindow()
 	RegisterClassW(&cls);
 	window = CreateWindowW(cls.lpszClassName, L"Cafe Shelf disposable drop test",
 		WS_OVERLAPPEDWINDOW | WS_VISIBLE, 60, 60, 900, 600, nullptr, nullptr, cls.hInstance, nullptr);
-	return window != nullptr;
+	if (!window) return false;
+	// The launcher hides the console using STARTUPINFO. Windows applies that
+	// setting to the first top-level show as well; explicitly show our UI.
+	std::cout << "Window visible before explicit show=" << IsWindowVisible(window) << '\n';
+	ShowWindow(window, SW_SHOWDEFAULT);
+	ShowWindow(window, SW_RESTORE);
+	UpdateWindow(window);
+	std::cout << "Window visible after explicit show=" << IsWindowVisible(window) << '\n';
+	return true;
 }
 
 // Separate process reproduces the launcher's STARTUPINFO, before WebView2
@@ -275,6 +288,8 @@ int wmain(int argc, wchar_t** argv)
 	const bool onCi = GetEnvironmentVariableW(L"GITHUB_ACTIONS", ci, 8) && wcscmp(ci, L"true") == 0;
 	if (onCi && argc == 2 && wcscmp(argv[1], L"--window-check") == 0) return CheckHiddenStartup();
 	if (onCi && argc == 2 && wcscmp(argv[1], L"--window-regression") == 0) return RunWindowRegression();
+	if (onCi && argc == 2 && wcscmp(argv[1], L"--exit-check-0") == 0) { Sleep(500); return 0; }
+	if (onCi && argc == 2 && wcscmp(argv[1], L"--exit-check-7") == 0) { Sleep(500); return 7; }
 	const bool disposableVm = argc == 7 && wcscmp(argv[6], L"--disposable-vm") == 0;
 	if ((!onCi && !disposableVm) || (argc != 6 && argc != 7))
 	{
