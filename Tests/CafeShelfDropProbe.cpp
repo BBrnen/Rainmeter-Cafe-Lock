@@ -72,6 +72,7 @@ private:
 void StartDrop()
 {
 	if (finished || nextFixture >= fixtures.size()) return;
+	std::cout << "Starting Windows OLE drop " << nextFixture << '\n';
 	ComPtr<IShellItem> item;
 	HRESULT hr = SHCreateItemFromParsingName(fixtures[nextFixture].c_str(), nullptr, IID_PPV_ARGS(&item));
 	if (FAILED(hr)) { Fail("create real shell item", hr); return; }
@@ -81,7 +82,7 @@ void StartDrop()
 	POINT point = {350, 250};
 	ClientToScreen(window, &point);
 	SetForegroundWindow(window);
-	SetCursorPos(point.x, point.y);
+	if (!SetCursorPos(point.x, point.y)) { Fail("no input desktop cursor access", HRESULT_FROM_WIN32(GetLastError())); return; }
 	Mouse(MOUSEEVENTF_LEFTDOWN);
 	if (finished) return;
 	SetTimer(window, 2, 500, nullptr);
@@ -89,6 +90,7 @@ void StartDrop()
 	source.Attach(new DropSource());
 	DWORD effect = 0;
 	hr = DoDragDrop(data.Get(), source.Get(), DROPEFFECT_COPY | DROPEFFECT_LINK, &effect);
+	std::cout << "OLE drag returned HRESULT=" << std::hex << hr << std::dec << '\n';
 	KillTimer(window, 2);
 	Mouse(MOUSEEVENTF_LEFTUP);
 	if (hr != DRAGDROP_S_DROP) Fail("Windows drag did not complete", hr);
@@ -180,6 +182,8 @@ HRESULT Receive(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args)
 
 int wmain(int argc, wchar_t** argv)
 {
+	std::cout << std::unitbuf;
+	std::wcout << std::unitbuf;
 	wchar_t ci[8] = {};
 	if (!GetEnvironmentVariableW(L"GITHUB_ACTIONS", ci, 8) || wcscmp(ci, L"true") || argc != 6)
 	{

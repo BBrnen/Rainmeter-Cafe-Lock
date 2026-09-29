@@ -33,8 +33,23 @@ try {
     )
     & cl.exe @compilerArgs
     if ($LASTEXITCODE -ne 0) { throw 'Drop probe compilation failed' }
-    & ./CafeShelfDropProbe.exe $link $exe $folder $document (Join-Path $directory 'BrowserProfile')
-    if ($LASTEXITCODE -ne 0) { throw 'Real Windows drop probe failed; do not assume Browse-only delivery is acceptable.' }
+    $outLog = Join-Path $directory 'probe.stdout.log'
+    $errLog = Join-Path $directory 'probe.stderr.log'
+    $arguments = @($link, $exe, $folder, $document, (Join-Path $directory 'BrowserProfile')) |
+        ForEach-Object { '"' + $_ + '"' }
+    $probe = Start-Process -FilePath (Join-Path $directory 'CafeShelfDropProbe.exe') -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    try {
+        if (!$probe.WaitForExit(120000)) {
+            Stop-Process -Id $probe.Id -Force
+            throw 'Real drop probe exceeded 120 seconds; this desktop has not proved drag/drop.'
+        }
+        $probe.Refresh()
+        if ($probe.ExitCode -ne 0) { throw "Real Windows drop probe failed ($($probe.ExitCode)); do not assume Browse-only delivery is acceptable." }
+    } finally {
+        if (Test-Path -LiteralPath $outLog) { Get-Content -LiteralPath $outLog }
+        if (Test-Path -LiteralPath $errLog) { Get-Content -LiteralPath $errLog }
+        $probe.Dispose()
+    }
 } finally {
     Pop-Location
 }
