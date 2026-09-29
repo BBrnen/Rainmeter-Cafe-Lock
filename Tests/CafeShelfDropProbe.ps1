@@ -29,7 +29,7 @@ try {
         "$repo/Tests/CafeShelfDropProbe.cpp",
         '/Fe:CafeShelfDropProbe.exe', '/link',
         "$sdk/build/native/x64/WebView2LoaderStatic.lib",
-        'user32.lib', 'ole32.lib', 'oleaut32.lib', 'shell32.lib', 'shlwapi.lib', 'uuid.lib', 'version.lib'
+        'advapi32.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib', 'shell32.lib', 'shlwapi.lib', 'uuid.lib', 'version.lib'
     )
     & cl.exe @compilerArgs
     if ($LASTEXITCODE -ne 0) { throw 'Drop probe compilation failed' }
