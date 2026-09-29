@@ -21,7 +21,7 @@ VIAddVersionKey "LegalCopyright" "Rainmeter contributors; GPL v2 or later"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\..\LICENSE"
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TEXT "Rainmeter Cafe Lock is installed. Open it from the Start menu in the cafe Windows account, then use Unlock / Enter Maintenance Mode to create the password before customer use. Setup does not launch Rainmeter as administrator."
+!define MUI_FINISHPAGE_TEXT "Rainmeter Cafe Lock is installed. Open it from the Start menu in the cafe Windows account, then use Unlock / Enter Maintenance Mode to create the password before customer use. It will start locked when any Windows user signs in. Setup does not launch Rainmeter as administrator."
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -64,6 +64,8 @@ Section "Install"
  Quit
  CreateDirectory "$SMPROGRAMS\Rainmeter Cafe Lock"
  CreateShortCut "$SMPROGRAMS\Rainmeter Cafe Lock\Rainmeter Cafe Lock.lnk" "$INSTDIR\Rainmeter.exe"
+ ; Shared Startup runs with each signed-in user's token, never as a service/admin task.
+ CreateShortCut "$SMSTARTUP\Rainmeter Cafe Lock.lnk" "$INSTDIR\Rainmeter.exe"
  WriteRegStr HKLM "Software\Rainmeter Cafe Lock" "InstallLocation" "$INSTDIR"
  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock" "DisplayName" "Rainmeter Cafe Lock (x64)"
  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock" "DisplayVersion" "4.5.26.3894"
@@ -87,6 +89,7 @@ Section "Uninstall"
  Delete "$INSTDIR\Uninstall.exe"
  RMDir "$INSTDIR"
  Delete "$SMPROGRAMS\Rainmeter Cafe Lock\Rainmeter Cafe Lock.lnk"
+ Delete "$SMSTARTUP\Rainmeter Cafe Lock.lnk"
  RMDir "$SMPROGRAMS\Rainmeter Cafe Lock"
  DeleteRegKey HKLM "Software\Rainmeter Cafe Lock"
  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock"
