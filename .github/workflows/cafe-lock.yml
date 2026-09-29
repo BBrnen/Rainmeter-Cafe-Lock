@@ -1,17 +1,17 @@
-name: Validate upstream Windows build
+name: Build and test Cafe Lock
 
 on:
   push:
-    branches: [stage-2-baseline-build]
+    branches: [stage-3-cafe-lock]
   pull_request:
-    branches: [main]
+    branches: [main, stage-2-baseline-build]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  baseline-x64:
+  cafe-lock-x64:
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -21,13 +21,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify application source matches official stable release
-        shell: pwsh
-        run: |
-          git diff --exit-code 5a124b6a09e2f7f67f8be9232718c489100e6173 HEAD -- . ':(exclude).github' ':(exclude)Docs/CafeLock.md'
-          if ($LASTEXITCODE -ne 0) { throw 'Application source or build inputs differ from upstream.' }
-
-      - name: Build unmodified Rainmeter x64
+      - name: Build Cafe Lock x64
         working-directory: Build
         shell: cmd
         run: Build.bat rainmeter-64 4.5.26.3894
@@ -47,18 +41,30 @@ jobs:
             'Official baseline: 5a124b6a09e2f7f67f8be9232718c489100e6173'
             "Build commit: $env:GITHUB_SHA"
             'Configuration: Release x64; Visual Studio 2022; upstream Build.bat'
-            'Unmodified baseline only. Cafe Lock is not implemented.'
-          ) | Set-Content x64-Release/BASELINE-BUILD.txt
+            'Stage 3 review build: always locked. No Maintenance Mode or installer.'
+          ) | Set-Content x64-Release/CAFE-LOCK-BUILD.txt
           Get-ChildItem x64-Release -Recurse -File |
             Where-Object { $_.FullName -notmatch '[\\/]Obj[\\/]' -and $_.Extension -in '.exe', '.dll' } |
             Get-FileHash -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $([IO.Path]::GetRelativePath((Resolve-Path 'x64-Release'), $_.Path))" } |
             Set-Content x64-Release/SHA256SUMS.txt
 
-      - name: Upload unmodified x64 baseline
+      - name: Test Cafe Lock policy
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX Tests\CafeLockPolicy.cpp /Fe:CafeLockPolicy.exe
+          if errorlevel 1 exit /b 1
+          CafeLockPolicy.exe
+
+      - name: Exercise running Cafe Lock
+        shell: pwsh
+        run: ./Tests/CafeLockSmoke.ps1
+
+      - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Rainmeter-upstream-4.5.26-x64-baseline
+          name: Rainmeter-Cafe-Lock-stage3-x64
           path: |
             x64-Release
             !x64-Release/Obj
