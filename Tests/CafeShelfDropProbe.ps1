@@ -63,6 +63,12 @@ try {
                 Copy-Item -LiteralPath $_.FullName -Destination $destination
             }
         [System.IO.File]::WriteAllText((Join-Path $kit 'BUILD.md'), "Test-only diagnostic built from $env:GITHUB_SHA. Not a Rainmeter installer.")
+        $binaryHash = (Get-FileHash -LiteralPath (Join-Path $kit 'CafeShelfDropProbe.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+        [System.IO.File]::WriteAllText((Join-Path $kit 'SHA256SUMS'), "$binaryHash  CafeShelfDropProbe.exe")
+        $parseErrors = $null
+        $tokens = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $kit 'CafeShelfDropProbe.ps1'), [ref]$tokens, [ref]$parseErrors)
+        if ($parseErrors.Count -ne 0) { throw 'Packaged diagnostic script does not parse.' }
     } else {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'CafeShelfDropProbe.exe') -Destination $directory
     }

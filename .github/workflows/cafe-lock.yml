@@ -52,6 +52,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Check pull-request diff whitespace
+        shell: pwsh
+        env:
+          CAFE_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          git diff --check "$env:CAFE_DIFF_BASE" HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace errors in reviewed changes' }
+
       - name: Build Cafe Lock x64
         working-directory: Build
         shell: cmd

@@ -87,6 +87,11 @@ void RunDrop(const std::wstring& path)
 	std::cout << "Focusing target window\n";
 	SetForegroundWindow(window);
 	if (!SetCursorPos(point.x, point.y)) { Fail("no input desktop cursor access", HRESULT_FROM_WIN32(GetLastError())); return; }
+	if (GetAncestor(WindowFromPoint(point), GA_ROOT) != window)
+	{
+		Fail("test window is covered; refusing to send input elsewhere");
+		return;
+	}
 	std::cout << "Cursor placed; pressing mouse\n";
 	Mouse(MOUSEEVENTF_LEFTDOWN);
 	if (finished) return;
