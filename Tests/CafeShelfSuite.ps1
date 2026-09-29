@@ -61,6 +61,7 @@ using System;
 using System.Runtime.InteropServices;
 public static class ShelfShell {
  [DllImport("shell32.dll")] public static extern void SHChangeNotify(uint evt,uint flags,IntPtr item1,IntPtr item2);
+ [DllImport("shlwapi.dll",CharSet=CharSet.Unicode)] public static extern int AssocQueryString(uint flags,uint str,string assoc,string extra,System.Text.StringBuilder result,ref uint size);
 }
 '@
 function Click-Shelf([int]$x,[int]$y) {
@@ -98,12 +99,33 @@ $classes = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Classe
 $extension = $classes.CreateSubKey('.html')
 $oldDefault = $extension.GetValue('', $null)
 $hadDefault = $extension.GetValueNames() -contains ''
-$progId = 'CafeLock.CI.Html.' + [guid]::NewGuid().ToString('N')
+$association = [Text.StringBuilder]::new(1024)
+[uint32]$associationSize = 1024
+$associationResult = [ShelfShell]::AssocQueryString(0,20,'.html',$null,$association,[ref]$associationSize)
+$choice = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.html\UserChoice')
+$chosenProgId = if ($choice) { $choice.GetValue('ProgId',$null); $choice.Dispose() } else { $null }
+# Keep Windows' existing choice (including its protected hash). Override only
+# that handler's command in this disposable account, not the protected choice.
+$progId = if ($chosenProgId) { $chosenProgId } elseif ($associationResult -eq 0) { $association.ToString() } else { 'htmlfile' }
+if ($progId -notmatch '^[a-zA-Z0-9_.\\-]+$') { throw 'Unexpected HTML association identifier' }
+Write-Output "HTML control association: $progId; query result: $associationResult"
+$commandPath = "$progId\shell\open\command"
+$existingCommand = $classes.OpenSubKey($commandPath)
+$savedValues = @{}
+if ($existingCommand) {
+  foreach ($name in @('','DelegateExecute')) {
+    if ($existingCommand.GetValueNames() -contains $name) {
+      $savedValues[$name] = @($existingCommand.GetValue($name,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames),$existingCommand.GetValueKind($name))
+    }
+  }
+  $existingCommand.Dispose()
+}
 try {
   # A harmless browser stand-in records actual ShellExecute dispatch. A control
   # launch below proves the association works before a blocked click can pass.
-  $command = $classes.CreateSubKey("$progId\shell\open\command")
+  $command = $classes.CreateSubKey($commandPath)
   $command.SetValue('', ('"' + "$root\HtmlHandler\Probe.exe" + '" "%1"'))
+  $command.SetValue('DelegateExecute','')
   $command.Dispose()
   $extension.SetValue('', $progId)
   [ShelfShell]::SHChangeNotify(0x08000000,0,[IntPtr]::Zero,[IntPtr]::Zero)
@@ -165,7 +187,12 @@ try {
   if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
   if ($hadDefault) { $extension.SetValue('', $oldDefault) } else { $extension.DeleteValue('', $false) }
   $extension.Dispose()
-  $classes.DeleteSubKeyTree($progId, $false)
+  $command = $classes.CreateSubKey($commandPath)
+  foreach ($name in @('','DelegateExecute')) {
+    if ($savedValues.ContainsKey($name)) { $command.SetValue($name,$savedValues[$name][0],$savedValues[$name][1]) }
+    else { $command.DeleteValue($name,$false) }
+  }
+  $command.Dispose()
   $classes.Dispose()
   [ShelfShell]::SHChangeNotify(0x08000000,0,[IntPtr]::Zero,[IntPtr]::Zero)
 }
