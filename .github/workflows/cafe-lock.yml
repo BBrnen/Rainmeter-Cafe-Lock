@@ -86,8 +86,8 @@ jobs:
           persist-credentials: false
 
       - name: Test real ShelfSuite with a standard-user token
-        shell: cmd
-        run: RunAsStandard.exe "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -File Tests\CafeShelfSuite.ps1 -ShelfSuiteDirectory work-package\ShelfSuite
+        shell: pwsh
+        run: ./Tests/CafeShelfSuiteRunner.ps1 -ShelfSuiteDirectory work-package/ShelfSuite
 
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

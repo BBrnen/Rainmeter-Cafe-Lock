@@ -1,5 +1,6 @@
 param(
   [Parameter(Mandatory=$true)][string]$ShelfSuiteDirectory,
+  [Parameter(Mandatory=$true)][string]$HtmlProbeDirectory,
   [string]$BuildDirectory = "$PSScriptRoot/../x64-Release"
 )
 $ErrorActionPreference = 'Stop'
@@ -16,7 +17,7 @@ $skins = Join-Path $root 'Skins'
 New-Item -ItemType Directory $skins | Out-Null
 Copy-Item -LiteralPath "$vendor/Shelf Suite" -Destination $skins -Recurse
 $originals = @(Get-ChildItem "$skins/Shelf Suite" -Recurse -File | Get-FileHash -Algorithm SHA256)
-foreach ($name in @('AppOne','AppTwo','HtmlHandler')) {
+foreach ($name in @('AppOne','AppTwo')) {
   New-Item -ItemType Directory "$root/$name" | Out-Null
   Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$root/$name/Probe.exe"
 }
@@ -56,14 +57,6 @@ WindowX=100
 WindowY=350
 "@ | Set-Content $ini
 . "$PSScriptRoot/CafeTestUi.ps1"
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public static class ShelfShell {
- [DllImport("shell32.dll")] public static extern void SHChangeNotify(uint evt,uint flags,IntPtr item1,IntPtr item2);
- [DllImport("shlwapi.dll",CharSet=CharSet.Unicode)] public static extern int AssocQueryString(uint flags,uint str,string assoc,string extra,System.Text.StringBuilder result,ref uint size);
-}
-'@
 function Click-Shelf([int]$x,[int]$y) {
   $r = [LockNative+Rect]::new()
   [void][LockNative]::GetWindowRect($window,[ref]$r)
@@ -82,11 +75,12 @@ function Read-ShelfState {
   return (Get-Content $snapshot -Raw)
 }
 function Assert-StandardLaunch($folder) {
-  Wait-For { Test-Path "$root/$folder/launched.txt" } "$folder launch"
-  if ((Get-Content "$root/$folder/launched.txt" -Raw) -ne 'standard') { throw "$folder was elevated" }
+  $probeFolder = if ($folder -eq 'HtmlHandler') { $HtmlProbeDirectory } else { "$root/$folder" }
+  Wait-For { Test-Path "$probeFolder/launched.txt" } "$folder launch"
+  if ((Get-Content "$probeFolder/launched.txt" -Raw) -ne 'standard') { throw "$folder was elevated" }
 }
 function Assert-GearBlocked {
-  $marker = "$root/HtmlHandler/launched.txt"
+  $marker = "$HtmlProbeDirectory/launched.txt"
   if (Test-Path $marker) { Remove-Item -LiteralPath $marker }
   Click-Shelf 452 20
   [void](Read-ShelfState) # Fence the skin's command queue after the click.
@@ -95,44 +89,12 @@ function Assert-GearBlocked {
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Gear bypassed maintenance authorization' }
 }
 $process = $null
-$classes = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Classes')
-$extension = $classes.CreateSubKey('.html')
-$oldDefault = $extension.GetValue('', $null)
-$hadDefault = $extension.GetValueNames() -contains ''
-$association = [Text.StringBuilder]::new(1024)
-[uint32]$associationSize = 1024
-$associationResult = [ShelfShell]::AssocQueryString(0,20,'.html',$null,$association,[ref]$associationSize)
-$choice = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.html\UserChoice')
-$chosenProgId = if ($choice) { $choice.GetValue('ProgId',$null); $choice.Dispose() } else { $null }
-# Keep Windows' existing choice (including its protected hash). Override only
-# that handler's command in this disposable account, not the protected choice.
-$progId = if ($chosenProgId) { $chosenProgId } elseif ($associationResult -eq 0) { $association.ToString() } else { 'htmlfile' }
-if ($progId -notmatch '^[a-zA-Z0-9_.\\-]+$') { throw 'Unexpected HTML association identifier' }
-Write-Output "HTML control association: $progId; query result: $associationResult"
-$commandPath = "$progId\shell\open\command"
-$existingCommand = $classes.OpenSubKey($commandPath)
-$savedValues = @{}
-if ($existingCommand) {
-  foreach ($name in @('','DelegateExecute')) {
-    if ($existingCommand.GetValueNames() -contains $name) {
-      $savedValues[$name] = @($existingCommand.GetValue($name,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames),$existingCommand.GetValueKind($name))
-    }
-  }
-  $existingCommand.Dispose()
-}
 try {
-  # A harmless browser stand-in records actual ShellExecute dispatch. A control
-  # launch below proves the association works before a blocked click can pass.
-  $command = $classes.CreateSubKey($commandPath)
-  $command.SetValue('', ('"' + "$root\HtmlHandler\Probe.exe" + '" "%1"'))
-  $command.SetValue('DelegateExecute','')
-  $command.Dispose()
-  $extension.SetValue('', $progId)
-  [ShelfShell]::SHChangeNotify(0x08000000,0,[IntPtr]::Zero,[IntPtr]::Zero)
   '<html>Association control</html>' | Set-Content "$root/control.html"
   Start-Process "$root/control.html"
   Assert-StandardLaunch 'HtmlHandler'
-  Remove-Item -LiteralPath "$root/HtmlHandler/launched.txt"
+  Remove-Item -LiteralPath "$HtmlProbeDirectory/launched.txt"
+  Write-Output 'PASS: standard-user control HTML dispatch reached the recorder.'
 
   $process = Start-Process "$build/Rainmeter.exe" -ArgumentList "`"$ini`"" -PassThru
   foreach ($shelf in 1..3) {
@@ -183,16 +145,11 @@ try {
     if ((Get-Content -LiteralPath $file.FullName -Raw).Contains($password)) { throw 'Plaintext password in configuration/logs' }
   }
   Write-Output "PASS: ShelfSuite configurator dispatch allowed after password unlock, remains non-elevated, blocked again by Lock Now; all upstream files unchanged. Revision: $revision"
+} catch {
+  $lastState = Get-ChildItem $root -Filter '*.state' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($lastState) { Write-Output "Last ShelfSuite state: $(Get-Content $lastState.FullName -Raw)" }
+  Get-ChildItem $root -Filter '*.log' -File | ForEach-Object { Get-Content $_.FullName -Tail 20 }
+  throw
 } finally {
   if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
-  if ($hadDefault) { $extension.SetValue('', $oldDefault) } else { $extension.DeleteValue('', $false) }
-  $extension.Dispose()
-  $command = $classes.CreateSubKey($commandPath)
-  foreach ($name in @('','DelegateExecute')) {
-    if ($savedValues.ContainsKey($name)) { $command.SetValue($name,$savedValues[$name][0],$savedValues[$name][1]) }
-    else { $command.DeleteValue($name,$false) }
-  }
-  $command.Dispose()
-  $classes.Dispose()
-  [ShelfShell]::SHChangeNotify(0x08000000,0,[IntPtr]::Zero,[IntPtr]::Zero)
 }
