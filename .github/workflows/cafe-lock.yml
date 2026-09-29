@@ -24,7 +24,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           if errorlevel 1 exit /b 1
-          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite Protocol
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite All
 
       - name: Probe real Windows shortcut and folder drops
         shell: cmd

@@ -44,3 +44,9 @@ Ruling: upstream disables C++ exceptions globally. New standalone parser/host mo
 - Run 36638462606 / job 109644780680 verified the Microsoft author signature, NuGet countersignature, SHA-256 and x86/x64 static-loader layout for SDK 1.0.4258.31. The manifest records the observed digest and author certificate fingerprint.
 - Ruling: run an isolated native WebView2/OLE drop feasibility probe before building the production host. It uses Windows shell data objects and actual mouse/drop delivery; a JavaScript-fabricated File must have no usable path. It neither writes ShelfSuite nor launches fixtures. This resolves the real shortcut/folder path uncertainty early; cost is temporary test-only harness code until it is incorporated into production-host tests.
 - The drop probe is not evidence of production host security or UI completion. Those remain pending.
+
+## Task 2 host policy tests
+
+Ruling: isolate native origin/resource/lifetime validation into HostPolicy alongside the Windows Host. This lets the real production policy run without a browser, while the separate host tests still must verify actual events and drop handling. Cost: two focused files beyond the initial filename list, with no extra public application interface.
+
+HostPolicy assertions are committed before implementation; RED pending. The first real-drop probe compiled but linking exposed missing Advapi32 dependencies from Microsoft's static loader. Added the required library without suppressing errors; real drop execution remains pending.
