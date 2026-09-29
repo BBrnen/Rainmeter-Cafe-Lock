@@ -140,7 +140,17 @@ function Submit-Password($dialog, $password, $confirm = '', $current = '') {
   if (-not [LockNative]::SetDlgItemText($dialog,100,$password)) { throw "Password field unavailable" }
   [void][LockNative]::SetDlgItemText($dialog,101,$confirm)
   [void][LockNative]::SetDlgItemText($dialog,102,$current)
-  [void][LockNative]::Send($dialog,0x111,1,0)
+  # Queue the click on Rainmeter's UI thread. Synchronous cross-process sends
+  # retain the remote sender context, which password edit controls protect against.
+  [void][LockNative]::SetDlgItemText($dialog,203,'')
+  [void][LockNative]::PostMessage($dialog,0x111,[IntPtr]1,[IntPtr]::Zero)
+  Wait-For {
+    if (-not [LockNative]::IsWindow($dialog)) { return $true }
+    $statusText = [Text.StringBuilder]::new(256)
+    [void][LockNative]::GetDlgItemText($dialog,203,$statusText,256)
+    return $statusText.Length -gt 0
+  } 'password submission completed'
+
 }
 function Assert-PasswordError($dialog) {
   $text = [Text.StringBuilder]::new(256)
