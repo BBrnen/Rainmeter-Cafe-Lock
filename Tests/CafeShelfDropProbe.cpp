@@ -119,7 +119,18 @@ HRESULT Receive(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args)
 	if (FAILED(args->TryGetWebMessageAsString(&message))) { Fail("message type"); return S_OK; }
 	const std::wstring kind = message;
 	CoTaskMemFree(message);
-	if (kind != L"fake" && kind != L"drop") { Fail("browser test script error"); return S_OK; }
+	if (kind == L"fakeRejected")
+	{
+		syntheticRejected = true;
+		std::cout << "PASS fabricated browser File rejected by WebView2 before native delivery\n";
+		PostMessageW(window, WM_APP + 1, 0, 0);
+		return S_OK;
+	}
+	if (kind != L"fake" && kind != L"drop")
+	{
+		std::wcout << L"Browser diagnostic: " << kind << L'\n';
+		Fail("browser test script error"); return S_OK;
+	}
 	ComPtr<ICoreWebView2WebMessageReceivedEventArgs2> args2;
 	ComPtr<ICoreWebView2ObjectCollectionView> objects;
 	UINT count = 0;
@@ -221,10 +232,14 @@ window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => {
  e.preventDefault();
  try { chrome.webview.postMessageWithAdditionalObjects('drop', Array.from(e.dataTransfer.files)); }
- catch (error) { chrome.webview.postMessage('error'); }
+ catch (error) { chrome.webview.postMessage('error:' + String(error)); }
 });
-try { chrome.webview.postMessageWithAdditionalObjects('fake', [new File(['test'], 'fake.lnk')]); }
-catch (error) { chrome.webview.postMessage('error'); }
+if (typeof chrome.webview.postMessageWithAdditionalObjects !== 'function') {
+ chrome.webview.postMessage('error:additional file object API unavailable');
+} else {
+ try { chrome.webview.postMessageWithAdditionalObjects('fake', [new File(['test'], 'fake.lnk')]); }
+ catch (error) { chrome.webview.postMessage('fakeRejected'); }
+}
 </script></body></html>)HTML");
 						}).Get());
 			}).Get());
