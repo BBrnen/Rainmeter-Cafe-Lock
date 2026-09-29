@@ -208,9 +208,11 @@ int wmain(int argc, wchar_t** argv)
 	std::cout << std::unitbuf;
 	std::wcout << std::unitbuf;
 	wchar_t ci[8] = {};
-	if (!GetEnvironmentVariableW(L"GITHUB_ACTIONS", ci, 8) || wcscmp(ci, L"true") || argc != 6)
+	const bool onCi = GetEnvironmentVariableW(L"GITHUB_ACTIONS", ci, 8) && wcscmp(ci, L"true") == 0;
+	const bool disposableVm = argc == 7 && wcscmp(argv[6], L"--disposable-vm") == 0;
+	if ((!onCi && !disposableVm) || (argc != 6 && argc != 7))
 	{
-		std::cerr << "Disposable CI only; requires four fixtures and a private browser profile.\n";
+		std::cerr << "Use the disposable CI or spare-PC diagnostic script; requires four fixtures and a private browser profile.\n";
 		return 2;
 	}
 	HANDLE token = nullptr;
@@ -233,6 +235,36 @@ int wmain(int argc, wchar_t** argv)
 		std::cerr << "Real drag/drop must be tested as a standard user.\n";
 		return 2;
 	}
+DWORD sessionId = 0;
+	ProcessIdToSessionId(GetCurrentProcessId(), &sessionId);
+	USEROBJECTFLAGS station = {};
+	DWORD stationSize = 0;
+	if (!GetUserObjectInformationW(GetProcessWindowStation(), UOI_FLAGS, &station, sizeof(station), &stationSize))
+	{
+		std::cerr << "Cannot inspect the input window station: " << GetLastError() << '\n';
+		return 2;
+	}
+	std::cout << "Windows session=" << sessionId << ", interactive station=" <<
+		((station.dwFlags & WSF_VISIBLE) ? "yes" : "no") << '\n';
+	if (!(station.dwFlags & WSF_VISIBLE))
+	{
+		std::cerr << "A real interactive Windows desktop is required; this runner cannot prove drag/drop.\n";
+		return 2;
+	}
+	if (!CreateDirectoryW(argv[5], nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+	{
+		std::cerr << "Cannot create the private browser profile: " << GetLastError() << '\n';
+		return 2;
+	}
+	const std::wstring profileMarker = std::wstring(argv[5]) + L"\\probe-write-check";
+	HANDLE marker = CreateFileW(profileMarker.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (marker == INVALID_HANDLE_VALUE)
+	{
+		std::cerr << "Standard user cannot write the private browser profile: " << GetLastError() << '\n';
+		return 2;
+	}
+	CloseHandle(marker);
+	std::cout << "PASS private browser profile is writable by the standard user\n";
 	for (int i = 1; i <= 4; ++i) fixtures.emplace_back(argv[i]);
 	if (FAILED(OleInitialize(nullptr))) return 2;
 	LPWSTR version = nullptr;
