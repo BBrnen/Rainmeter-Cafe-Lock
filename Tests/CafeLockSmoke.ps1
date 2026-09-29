@@ -333,11 +333,13 @@ try {
     Assert-NoPlaintext
     [LockNative]::Bang($control,'!Quit')
     Wait-For { $process.HasExited } 'maintenance normal exit'
+    Remove-Item -LiteralPath "$fixture/updates.txt"
     $process = Start-Process (Join-Path $build 'Rainmeter.exe') -ArgumentList "`"$ini`"" -PassThru
     Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$fixture\Test.ini") -ne [IntPtr]::Zero } 'restarted skin'
     $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$fixture\Test.ini")
     $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
     $tray = [LockNative]::FindWindow('RainmeterTrayClass',$null)
+    Wait-For { Test-Path "$fixture/updates.txt" } 'restarted Lua updates and skin placement complete'
     $beforeRestart = Position $window
     [LockNative]::Bang($control,'!Move 450 450 LockTest')
     Start-Sleep -Milliseconds 300
