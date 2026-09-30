@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'All')]
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'All')]
     [string]$Suite = 'Protocol'
 )
 $ErrorActionPreference = 'Stop'
@@ -9,7 +9,7 @@ $output = Join-Path $repo 'work-package/CafeShelfTests'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
-    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons') } else { @($Suite) }
+    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config') } else { @($Suite) }
     if ($tests -contains 'Selection' -or $tests -contains 'Host' -or $tests -contains 'Browser') {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
@@ -25,6 +25,7 @@ try {
             Browser = 'CafeShelfBrowser.cpp'
             Launcher = 'CafeShelfLauncher.cpp'
             Icons = 'CafeShelfIcons.cpp'
+            Config = 'CafeShelfConfig.cpp'
         }[$test]
         $compilerArgs = @(
             '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/D_HAS_EXCEPTIONS=0', '/GR-', '/GL', '/utf-8',
@@ -37,6 +38,7 @@ try {
         )
         $arguments = @()
         $fixtureHashes = @()
+        if ($test -eq 'Config') { $compilerArgs += "$repo/Library/CafeShelf/Config.cpp" }
         if ($test -eq 'Launcher' -or $test -eq 'Icons') {
             $fixtures = Join-Path $output ('Launcher-' + [guid]::NewGuid().ToString('N'))
             & "$repo/Tests/CafeShelfFixtures.ps1" -Directory $fixtures

@@ -59,7 +59,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $Directory 'Corrupt.png'), 'not an image')
     $oversized = [IO.File]::Create((Join-Path $Directory 'Oversized.png'))
     try { $oversized.SetLength(32MB + 1) } finally { $oversized.Dispose() }
-    Add-Content -LiteralPath $version -Value '2 ICON "Transparent.ico"'
+    Add-Content -LiteralPath $version -Value ([Environment]::NewLine + '2 ICON "Transparent.ico"')
     & rc.exe /nologo /foFixture.res $version
     if ($LASTEXITCODE -ne 0) { throw 'Launcher fixture resource compilation failed' }
     & cl.exe /nologo /EHsc /W4 /WX /DNOMINMAX /utf-8 $source Fixture.res '/Fe:Versioned application.exe' /link /SUBSYSTEM:WINDOWS
