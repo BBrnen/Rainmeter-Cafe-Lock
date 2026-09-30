@@ -293,4 +293,74 @@ if ($Suite -in @('Apply','All')) {
     }
     Import-Module "$PackageDirectory/Updater.psm1" -Force
 }
+if ($Suite -in @('UI','All')) {
+    Assert-True (Test-Path "$PackageDirectory/Update-ShelfSuite.ps1") 'guided updater must exist'
+    function Setup-Ui {
+        . "$PackageDirectory/Update-ShelfSuite.ps1"
+        $script:UiRoot=New-SkinFixture (Join-Path $scratch ([Guid]::NewGuid().ToString('N'))) $upstream
+        $script:UiMessages=New-Object Collections.Generic.List[string]; $script:UiConfirm=$false; $script:UiCancelFolder=$false; $script:UiBlocked=$false
+        function script:Select-F1Folder { if ($script:UiCancelFolder) { return $null }; return $script:UiRoot }
+        function script:Show-F1Message($Text,$ErrorMessage) { $script:UiMessages.Add($Text) }
+        function script:Confirm-F1Update($Text) { $script:UiMessages.Add($Text); return $script:UiConfirm }
+        function script:Assert-F1UiReady { if ($script:UiBlocked) { throw 'Close Rainmeter normally; process inspection refused.' } }
+        $m=Get-Module Updater; & $m { function script:Assert-F1RainmeterClosed {} }
+        # Dot-source into script scope, without launching a real dialog on this desktop.
+        return ${function:Invoke-F1GuidedUpdate}
+    }
+    Test-Case 'CancelChangesNothing' {
+        $run=Setup-Ui; $before=@([IO.Directory]::EnumerateDirectories((Split-Path $script:UiRoot -Parent)))
+        Assert-True ((& $run) -eq 0) 'confirmation cancel is not successful exit'
+        Assert-True (@(Compare-Object $before @([IO.Directory]::EnumerateDirectories((Split-Path $script:UiRoot -Parent)))).Count -eq 0) 'cancel created backup'
+        $script:UiCancelFolder=$true; Assert-True ((& $run) -eq 0) 'folder cancel failed'
+    }
+    Test-Case 'RunningRainmeterRefuses' { $run=Setup-Ui; $script:UiBlocked=$true; Assert-True ((& $run) -eq 1) 'running process not refused' }
+    Test-Case 'ProcessInspectionFailureRefuses' { $run=Setup-Ui; $script:UiBlocked=$true; Assert-True ((& $run) -eq 1 -and $script:UiMessages.Count -eq 1) 'unavailable process inspection not refused' }
+    Test-Case 'ResolvedPathAndChangedListConfirmed' {
+        $run=Setup-Ui; $script:UiConfirm=$true
+        Assert-True ((& $run) -eq 0) 'guided update failed'
+        Assert-True (($script:UiMessages -join "`n").IndexOf($script:UiRoot) -ge 0) 'resolved root not displayed'
+        Assert-True (($script:UiMessages -join "`n").IndexOf('Shelf3/Shelf.ini') -ge 0) 'change list missing'
+    }
+    Test-Case 'NoOpSkipsBackup' {
+        $run=Setup-Ui; $script:UiConfirm=$true; & $run | Out-Null
+        $before=@([IO.Directory]::EnumerateDirectories((Split-Path $script:UiRoot -Parent))); & $run | Out-Null
+        Assert-True (@(Compare-Object $before @([IO.Directory]::EnumerateDirectories((Split-Path $script:UiRoot -Parent)))).Count -eq 0) 'UI no-op created backup'
+    }
+    Test-Case 'SafeErrorContainsNoSourceContents' {
+        $run=Setup-Ui; [IO.File]::AppendAllText("$script:UiRoot/Shelf1/Shelf.ini",'DO-NOT-DISPLAY-CONTENT')
+        Assert-True ((& $run) -eq 1) 'custom source not refused'
+        Assert-True (($script:UiMessages -join "`n").IndexOf('DO-NOT-DISPLAY-CONTENT') -lt 0 -and ($script:UiMessages -join "`n").IndexOf('Shelf1/Shelf.ini') -ge 0) 'error exposed contents or omitted filename'
+    }
+    Test-Case 'LauncherUsesBuiltinPowerShellAndDifferentWorkingDirectory' {
+        $launch=Join-Path $scratch ('launcher space '+[char]0xe9); [IO.Directory]::CreateDirectory($launch) | Out-Null
+        [IO.File]::Copy("$PackageDirectory/Update-ShelfSuite.cmd","$launch/Update-ShelfSuite.cmd")
+        $stub='Write-Output ("PS="+$PSVersionTable.PSVersion.ToString()); Write-Output ("SCRIPT="+$PSScriptRoot); exit 0'
+        Write-Fixture "$launch/Update-ShelfSuite.ps1" $script:Utf8.GetBytes($stub)
+        $start=New-Object Diagnostics.ProcessStartInfo
+        $start.FileName=$env:ComSpec; $start.Arguments='/d /c ""'+"$launch\Update-ShelfSuite.cmd"+'""'; $start.WorkingDirectory=$scratch
+        $start.UseShellExecute=$false; $start.RedirectStandardOutput=$true; $start.RedirectStandardError=$true; $start.RedirectStandardInput=$true
+        $process=New-Object Diagnostics.Process; $process.StartInfo=$start
+        try {
+            $process.Start() | Out-Null; $process.StandardInput.WriteLine(' '); $process.StandardInput.Close()
+            $output=$process.StandardOutput.ReadToEnd(); $err=$process.StandardError.ReadToEnd(); $process.WaitForExit()
+            Assert-True ($process.ExitCode -eq 0 -and $output.IndexOf('PS=5.1') -ge 0 -and $output.IndexOf($launch) -ge 0) "launcher runtime/path failure: $err"
+        } finally { $process.Dispose() }
+    }
+    Test-Case 'PolicyRefusalDoesNotAlterPolicy' {
+        $launch=Join-Path $scratch 'policy-refusal'; [IO.Directory]::CreateDirectory($launch) | Out-Null
+        [IO.File]::Copy("$PackageDirectory/Update-ShelfSuite.cmd","$launch/Update-ShelfSuite.cmd")
+        Write-Fixture "$launch/Update-ShelfSuite.ps1" $script:Utf8.GetBytes('[IO.File]::WriteAllText((Join-Path $PSScriptRoot "unexpected.txt"),"ran"); exit 0')
+        $before=[Microsoft.PowerShell.ExecutionPolicy]::Restricted # child process only; persistent policy is untouched
+        $start=New-Object Diagnostics.ProcessStartInfo
+        $start.FileName=$env:ComSpec; $start.Arguments='/d /c ""'+"$launch\Update-ShelfSuite.cmd"+'""'
+        $start.UseShellExecute=$false; $start.RedirectStandardOutput=$true; $start.RedirectStandardError=$true; $start.RedirectStandardInput=$true
+        $start.EnvironmentVariables['PSExecutionPolicyPreference']=$before.ToString()
+        $process=New-Object Diagnostics.Process; $process.StartInfo=$start
+        try {
+            $process.Start() | Out-Null; $process.StandardInput.WriteLine(' '); $process.StandardInput.Close()
+            $output=$process.StandardOutput.ReadToEnd(); $err=$process.StandardError.ReadToEnd(); $process.WaitForExit()
+            Assert-True ($process.ExitCode -eq 1 -and -not [IO.File]::Exists("$launch/unexpected.txt") -and $output.IndexOf('policy') -ge 0) 'launcher bypassed restricted policy or hid failure'
+        } finally { $process.Dispose() }
+    }
+}
 Write-Output "PASS: $script:Passed F1 delivery checks ($Suite); disposable fixtures: $scratch"

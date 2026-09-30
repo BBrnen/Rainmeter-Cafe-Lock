@@ -81,3 +81,11 @@ Before deployment, on a spare PC or VM:
 These physical/session and browser checks must be recorded separately; they are
 not implied by a green CI run. Do not restart or sign out an active user's PC as
 part of the automated test.
+# Separate F1 compatibility delivery
+
+The guided standalone updater and its spare-PC/VM checklist are documented in
+[`Build/ShelfSuiteF1/README.md`](../Build/ShelfSuiteF1/README.md). Its ZIP is a
+separate Windows workflow review artifact; the normal Cafe Lock installer does
+not deploy the F1 patch. Only use an artifact whose exact revision passed full
+verification. Owner manual acceptance remains required before release.
+
