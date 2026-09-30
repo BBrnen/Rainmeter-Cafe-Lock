@@ -1,7 +1,7 @@
 # ShelfSuite adaptive tabs design
 
-Date: 2026-10-01  
-Branch: `feature/shelfsuite-layout-usability`  
+Date: 2026-10-01
+Branch: `feature/shelfsuite-layout-usability`
 Base: `e4796c37ecd5d0f0de12d2ddbec267c6a91f463b`
 
 ## Purpose
