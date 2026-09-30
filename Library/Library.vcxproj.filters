@@ -262,6 +262,7 @@
     <ClCompile Include="CafeShelf\Controller.cpp"><Filter>CafeShelf</Filter></ClCompile>
     <ClCompile Include="CafeShelf\Selection.cpp"><Filter>CafeShelf</Filter></ClCompile>
     <ClCompile Include="CafeShelf\Host.cpp"><Filter>CafeShelf</Filter></ClCompile>
+    <ClInclude Include="CafeShelf\Json.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Types.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Session.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Protocol.h"><Filter>CafeShelf</Filter></ClInclude>

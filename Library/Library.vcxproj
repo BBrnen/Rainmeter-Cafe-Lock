@@ -32,32 +32,32 @@
     <ClCompile Include="CafeShelf\Session.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>$([System.String]::Copy('%(ClCompile.PreprocessorDefinitions)').Replace('_HAS_EXCEPTIONS=0','_HAS_EXCEPTIONS=1'));NOMINMAX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="CafeShelf\Protocol.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>$([System.String]::Copy('%(ClCompile.PreprocessorDefinitions)').Replace('_HAS_EXCEPTIONS=0','_HAS_EXCEPTIONS=1'));NOMINMAX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="CafeShelf\HostPolicy.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>$([System.String]::Copy('%(ClCompile.PreprocessorDefinitions)').Replace('_HAS_EXCEPTIONS=0','_HAS_EXCEPTIONS=1'));NOMINMAX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="CafeShelf\Controller.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>$([System.String]::Copy('%(ClCompile.PreprocessorDefinitions)').Replace('_HAS_EXCEPTIONS=0','_HAS_EXCEPTIONS=1'));NOMINMAX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="CafeShelf\Selection.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>$([System.String]::Copy('%(ClCompile.PreprocessorDefinitions)').Replace('_HAS_EXCEPTIONS=0','_HAS_EXCEPTIONS=1'));NOMINMAX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="CafeShelf\Host.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>$([System.String]::Copy('%(ClCompile.PreprocessorDefinitions)').Replace('_HAS_EXCEPTIONS=0','_HAS_EXCEPTIONS=1'));NOMINMAX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="CafeLock.cpp" />
     <ClCompile Include="CommandHandler.cpp" />
@@ -156,6 +156,7 @@
     <ResourceCompile Include="Library.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CafeShelf\Json.h" />
     <ClInclude Include="CafeShelf\Types.h" />
     <ClInclude Include="CafeShelf\Session.h" />
     <ClInclude Include="CafeShelf\Protocol.h" />

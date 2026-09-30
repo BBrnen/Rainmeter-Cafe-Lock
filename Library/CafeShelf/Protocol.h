@@ -1,11 +1,11 @@
 #pragma once
 
 #include "Types.h"
-#include "../json/json.hpp"
+#include "Json.h"
 
 namespace CafeShelf
 {
-using Json = nlohmann::json;
+using Json = CafeShelfJson::json;
 
 enum class Operation
 {

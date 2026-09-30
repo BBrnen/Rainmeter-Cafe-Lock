@@ -35,8 +35,8 @@ struct Capture {
 class ObservedEnvironment final : public Microsoft::WRL::RuntimeClass<
 	Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, ICoreWebView2Environment> {
 public:
-	ObservedEnvironment(ICoreWebView2Environment* env, std::shared_ptr<Capture> value) :
-		inner(env), capture(std::move(value)) {}
+	ObservedEnvironment(ICoreWebView2Environment* env, std::shared_ptr<Capture> capturedState) :
+		inner(env), capture(std::move(capturedState)) {}
 	HRESULT STDMETHODCALLTYPE CreateCoreWebView2Controller(HWND parent,
 		ICoreWebView2CreateCoreWebView2ControllerCompletedHandler* handler) override {
 		auto state = capture;

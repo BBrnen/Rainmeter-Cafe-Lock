@@ -8,7 +8,7 @@ namespace
 {
 // SAX validates limits before building a DOM. Returning false stops the parser
 // immediately, including at the first container beyond the allowed depth.
-class BoundedJson : public nlohmann::json_sax<Json>
+class BoundedJson : public CafeShelfJson::json_sax<Json>
 {
 public:
 	bool null() override { return true; }
@@ -27,7 +27,7 @@ public:
 		return !m_Stack.empty() && m_Stack.back().object &&
 			StringAllowed(value) && m_Stack.back().keys.insert(value).second;
 	}
-	bool parse_error(size_t, const std::string&, const nlohmann::detail::exception&) override
+	bool parse_error(size_t, const std::string&, const CafeShelfJson::detail::exception&) override
 	{
 		return false;
 	}

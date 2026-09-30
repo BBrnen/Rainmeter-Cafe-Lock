@@ -25,7 +25,7 @@ try {
             Browser = 'CafeShelfBrowser.cpp'
         }[$test]
         $compilerArgs = @(
-            '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
+            '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/D_HAS_EXCEPTIONS=0', '/GR-', '/GL', '/utf-8',
             "$repo/Tests/$source",
             "$repo/Library/CafeShelf/Session.cpp",
             "$repo/Library/CafeShelf/Protocol.cpp",
