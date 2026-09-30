@@ -21,6 +21,6 @@ The tool creates a shortcut, copied Windows application, folder and text documen
 
 The tool needs the Microsoft WebView2 Runtime. If unavailable, the official download is https://developer.microsoft.com/microsoft-edge/webview2/ . Opening ordinary Edge is not proof that the separate Runtime is installed.
 
-The automated CI probe remains separate from this manual interaction and still reports failure if the runner cannot create a browser or deliver real drops. A compiled/uploaded kit does not mean actual drops passed.
+CI builds this manual kit with -BuildOnly and verifies its startup/exit-code plumbing; that step never claims real drops passed. Required CafeShelfTests -Suite All separately loads the actual embedded host and tests its browser security and revocation. The owner passed all four real Explorer drops on a standard-user desktop with kit 0f615fe; see the execution ledger. The earlier simulated-drag mode remains available by running the probe script without -BuildOnly on a disposable CI desktop, and still fails rather than suppressing controller/drop errors. That simulation is not a reliable substitute for Explorer interaction.
 
 Build details, source revision, executable SHA-256 and SDK verification are included. The Microsoft WebView2 SDK static loader is used; see https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31 and the included SDK notices. Source uses the repository's Rainmeter license.

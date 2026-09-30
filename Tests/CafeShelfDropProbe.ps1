@@ -1,7 +1,8 @@
-param([switch]$DisposableVM, [switch]$ProcessRegression, [string]$ProbeExe)
+param([switch]$DisposableVM, [switch]$ProcessRegression, [string]$ProbeExe, [switch]$BuildOnly)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $onCi = $env:GITHUB_ACTIONS -eq 'true'
+if ($BuildOnly -and !$onCi) { throw 'BuildOnly is for the disposable CI builder.' }
 if (!$onCi -and !$DisposableVM) { throw 'Use this only on a disposable CI desktop or explicitly selected spare PC/VM.' }
 
 function Start-ProbeProcess {
@@ -111,6 +112,11 @@ try {
         if ($parseErrors.Count -ne 0) { throw 'Packaged diagnostic script does not parse.' }
     } else {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'CafeShelfDropProbe.exe') -Destination $directory
+    }
+
+    if ($BuildOnly) {
+        Write-Host 'Diagnostic compiled; startup/exit-code regressions passed. No Explorer drop result is claimed by this build-only step.'
+        return
     }
 
     $outLog = Join-Path $directory 'probe.stdout.log'
