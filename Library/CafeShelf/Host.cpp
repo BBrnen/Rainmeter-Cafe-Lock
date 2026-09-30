@@ -1,6 +1,8 @@
 #include "Host.h"
 #include "Controller.h"
 #include "Selection.h"
+#include "Storage.h"
+#include <atomic>
 #include <WebView2.h>
 #include <wrl.h>
 #include <shlwapi.h>
@@ -88,11 +90,224 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 
 	bool Allowed() const { return !closed && control.Allows(ticket); }
 
+	struct Job
+	{
+		std::atomic<bool> done{false}, cancelled{false};
+		Work work;
+		Response reply;
+		std::map<std::wstring, Snapshot> snapshots;
+		SelectedFile selected;
+		Result<LauncherDraft> launcher;
+		Result<PngImage> image;
+		bool iconOnly = false;
+		std::shared_ptr<PreparedSave> prepared;
+	};
+	std::shared_ptr<Job> job;
+	std::map<std::wstring, Snapshot> snapshots;
+	std::map<SelectionId, std::shared_ptr<PngImage>> icons;
+
+	static std::string Preview(const PngImage& image)
+	{
+		static const char alphabet[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+		std::string text="data:image/png;base64,";
+		for(size_t i=0;i<image.bytes.size();i+=3)
+		{
+			const unsigned a=image.bytes[i], b=i+1<image.bytes.size()?image.bytes[i+1]:0,
+				c=i+2<image.bytes.size()?image.bytes[i+2]:0;
+			text+=alphabet[a>>2]; text+=alphabet[((a&3)<<4)|(b>>4)];
+			text+=i+1<image.bytes.size()?alphabet[((b&15)<<2)|(c>>6)]:'=';
+			text+=i+2<image.bytes.size()?alphabet[c&63]:'=';
+		}
+		return text;
+	}
+	static Json Model(const Snapshot& snapshot)
+	{
+		Json tabs=Json::array();
+		for(const auto& tab:snapshot.document.tabs)
+		{
+			Json items=Json::array();
+			for(const auto& item:tab.items)items.push_back({{"label",Utf8(item.label)},{"action",Utf8(item.action)},{"icon",Utf8(item.icon)}});
+			tabs.push_back({{"name",Utf8(tab.name)},{"items",std::move(items)}});
+		}
+		return {{"id",Utf8(snapshot.shelf.id)},{"version",snapshot.version},
+			{"tabCapacity",snapshot.shelf.tabCapacity},{"itemCapacity",snapshot.shelf.itemCapacity},
+			{"defaultIcon",Utf8(snapshot.document.defaultIcon)},{"tabs",std::move(tabs)}};
+	}
+	void StartJob(const Work& work, std::function<void(Job&)> action)
+	{
+		struct Context { std::shared_ptr<Job> job; std::function<void(Job&)> action; };
+		job=std::make_shared<Job>(); job->work=work; job->work.object.Reset();
+		job->reply={work.request.id,false,Error::IoError,Json::object()};
+		auto context=new Context{job,std::move(action)};
+		TP_CALLBACK_ENVIRON environmentOptions;
+		InitializeThreadpoolEnvironment(&environmentOptions);
+		// Threadpool retains the DLL through callback return, including shutdown.
+		SetThreadpoolCallbackLibrary(&environmentOptions,options.module);
+		const auto submitted=TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE instance,void* raw)
+		{
+			CallbackMayRunLong(instance);
+			std::unique_ptr<Context> context(static_cast<Context*>(raw));
+			auto& task=*context->job;
+			const auto initialized=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+			try
+			{
+				if(FAILED(initialized))task.reply.data={{"message","Windows could not start the file operation."}};
+				else if(!task.cancelled.load())context->action(task);
+			}
+			catch(...)
+			{
+				task.reply.ok=false; task.reply.code=Error::IoError;
+				task.reply.data={{"message","The operation failed. Existing configuration has not been replaced."}};
+			}
+			if(SUCCEEDED(initialized))CoUninitialize();
+			if(task.cancelled.load())task.prepared.reset();
+			task.done.store(true);
+		},context,&environmentOptions);
+		DestroyThreadpoolEnvironment(&environmentOptions);
+		if(!submitted) { delete context; job.reset(); busy=false; FailLater(L"Windows could not start the editor operation."); return; }
+		if(!SetTimer(window,1,30,nullptr)) { job->cancelled.store(true); FailLater(L"The editor could not monitor its operation."); }
+	}
+	void FinishJob()
+	{
+		if(!job || !job->done.load())return;
+		KillTimer(window,1);
+		auto completed=std::move(job);
+		if(!Allowed() || !control.Allows(completed->work.ticket)) { busy=false; return; }
+		auto& reply=completed->reply;
+		switch(completed->work.request.operation)
+		{
+		case Operation::Load:
+			if(reply.ok)snapshots=std::move(completed->snapshots);
+			break;
+		case Operation::BrowseLauncher: case Operation::BrowseFolder:
+		case Operation::BrowseIcon: case Operation::ImportDrop:
+			if(reply.ok)
+			{
+				const auto retained=control.Remember(completed->work.ticket,completed->selected);
+				if(!retained.ok) {reply.ok=false;reply.code=retained.code;reply.data={{"message","Close this draft and try again."}};break;}
+				reply.data={{"selectionId",retained.value}};
+				if(!completed->iconOnly)
+				{
+					reply.data["name"]=Utf8(completed->launcher.value.name);
+					reply.data["action"]=Utf8(completed->launcher.value.action);
+				}
+				if(completed->image.ok)
+				{
+					icons[retained.value]=std::make_shared<PngImage>(std::move(completed->image.value));
+					const auto name=completed->iconOnly?L"icon":completed->launcher.value.name;
+					reply.data["iconId"]=retained.value;
+					reply.data["iconName"]=Utf8(IconBaseName(name)+L".png");
+					reply.data["preview"]=Preview(*icons[retained.value]);
+				}
+				else reply.data["warning"]=Utf8(completed->image.message);
+			}
+			break;
+		case Operation::SaveEdits:
+			if(completed->prepared)
+			{
+				const auto result=Storage(options.shelfRoot).Commit(completed->prepared,
+					[this,t=completed->work.ticket](){return Allowed() && control.Allows(t);});
+				reply.ok=result.ok; reply.code=result.code;
+				reply.data=result.ok?Json{{"backup",Utf8(result.value.backup)},{"icon",Utf8(result.value.icon)}}:
+					Json{{"message",Utf8(result.message)}};
+				if(result.ok)
+				{
+					icons.clear(); control.CancelDraft(completed->work.ticket);
+					if(options.refreshShelf)options.refreshShelf(Wide(completed->work.request.payload["shelf"].get<std::string>()));
+				}
+			}
+			break;
+		default:break;
+		}
+		busy=false; Reply(reply);
+		if(!queue.empty() && Allowed())PostMessageW(window,WorkMessage,0,0);
+	}
+	void LoadShelves(const Work& work)
+	{
+		const auto root=options.shelfRoot;
+		StartJob(work,[root](Job& task)
+		{
+			task.reply.ok=true;task.reply.code=Error::None;
+			task.reply.data={{"mode","maintenance"},{"canSave",false},{"shelves",Json::array()}};
+			if(root.empty())return;
+			const Storage storage(root); const auto found=storage.Discover();
+			if(!found.ok){task.reply.data["message"]=Utf8(found.message);return;}
+			for(const auto& shelf:found.value)
+			{
+				if(task.cancelled.load())return;
+				auto loaded=storage.Load(shelf.id);
+				if(loaded.ok)
+				{
+					task.reply.data["shelves"].push_back(Model(loaded.value));
+					task.snapshots.emplace(shelf.id,std::move(loaded.value));
+				}
+				else task.reply.data["shelves"].push_back({{"id",Utf8(shelf.id)},{"tabs",Json::array()},{"error",Utf8(loaded.message)}});
+			}
+			task.reply.data["canSave"]=!task.snapshots.empty();
+		});
+	}
+	void InspectSelection(const Work& work,SelectedFile selected)
+	{
+		const bool iconOnly=work.request.operation==Operation::BrowseIcon ||
+			(work.request.operation==Operation::ImportDrop && work.request.payload["purpose"]=="icon");
+		StartJob(work,[selected,iconOnly](Job& task)
+		{
+			task.selected=selected;task.iconOnly=iconOnly;
+			if(!iconOnly)
+			{
+				task.launcher=InspectLauncher(selected);
+				if(!task.launcher.ok){task.reply.code=task.launcher.code;task.reply.data={{"message",Utf8(task.launcher.message)}};return;}
+				task.image=PrepareLauncherIcon(task.launcher.value);
+			}
+			else task.image=PrepareIcon(selected);
+			if(iconOnly && !task.image.ok){task.reply.code=task.image.code;task.reply.data={{"message",Utf8(task.image.message)}};return;}
+			task.reply.ok=true;task.reply.code=Error::None;
+		});
+	}
+	void PrepareSave(const Work& work)
+	{
+		const auto& payload=work.request.payload;
+		const auto found=snapshots.find(Wide(payload["shelf"].get<std::string>()));
+		if(found==snapshots.end() || payload["version"]!=found->second.version)
+		{
+			busy=false;Reply({work.request.id,false,Error::Stale,{{"message","Reload this shelf before saving."}}});
+			PostMessageW(window,WorkMessage,0,0);return;
+		}
+		const auto iconId=payload["iconId"].get<uint64_t>();
+		std::shared_ptr<PngImage> image;
+		if(iconId)
+		{
+			const auto icon=icons.find(iconId);
+			if(icon==icons.end() || !control.GetSelection(work.ticket,iconId).ok)
+			{
+				busy=false;Reply({work.request.id,false,Error::Stale,{{"message","Choose the icon again."}}});
+				PostMessageW(window,WorkMessage,0,0);return;
+			}
+			image=icon->second;
+		}
+		const auto& data=payload["edit"];
+		const std::map<std::string,EditKind> kinds={{"setItem",EditKind::SetItem},{"addItem",EditKind::AddItem},
+			{"removeItem",EditKind::RemoveItem},{"renameTab",EditKind::RenameTab},{"addTab",EditKind::AddTab},{"removeTab",EditKind::RemoveTab}};
+		Edit edit{kinds.at(data["kind"].get<std::string>()),data["tab"].get<size_t>(),data["item"].get<size_t>(),
+			Wide(data["label"].get<std::string>()),Wide(data["action"].get<std::string>()),Wide(data["icon"].get<std::string>())};
+		const auto snapshot=found->second; const auto root=options.shelfRoot;
+		StartJob(work,[root,snapshot,edit,image](Job& task)
+		{
+			const auto prepared=Storage(root).Prepare(snapshot,edit,image.get(),edit.label);
+			task.reply.ok=prepared.ok;task.reply.code=prepared.code;
+			if(prepared.ok)task.prepared=prepared.value;
+			else task.reply.data={{"message",Utf8(prepared.message)}};
+		});
+	}
+
+
 	void Close()
 	{
 		// This ordering applies even while a native picker pumps nested messages.
 		control.Revoke();
 		closed = true;
+		if(job){job->cancelled.store(true);job.reset();}
+		icons.clear(); snapshots.clear();
 		selection.Revoke();
 		queue.clear();
 		if (browser) browser->Close();
@@ -151,6 +366,9 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 			case LockMessage:
 				if (self->options.lockNow) self->options.lockNow();
 				self->Close();
+				return 0;
+			case WM_TIMER:
+				if(wp==1)self->FinishJob();
 				return 0;
 			case WorkMessage:
 				self->Drain();
@@ -435,12 +653,15 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 			return;
 		case Operation::CancelDraft:
 			control.CancelDraft(work.ticket);
+			icons.clear();
 			reply.ok = true; reply.code = Error::None;
 			break;
 		case Operation::Load:
-			reply.ok = true; reply.code = Error::None;
-			reply.data = {{"mode", "maintenance"}, {"canSave", false}};
-			break;
+			LoadShelves(work);
+			return;
+		case Operation::SaveEdits:
+			PrepareSave(work);
+			return;
 		case Operation::BrowseLauncher:
 		case Operation::BrowseFolder:
 		case Operation::BrowseIcon:
@@ -457,11 +678,8 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 				reply.data = {{"message", Utf8(selected.message)}};
 				break;
 			}
-			auto retained = control.Remember(work.ticket, selected.value);
-			reply.ok = retained.ok; reply.code = retained.code;
-			if (retained.ok) reply.data = {{"selectionId", retained.value},
-				{"path", Utf8(selected.value.path)}, {"directory", selected.value.directory}};
-			break;
+			InspectSelection(work,std::move(selected.value));
+			return;
 		}
 		default: break;
 		}
@@ -488,7 +706,7 @@ bool Host::Open()
 void Host::Close() { if (m_State) m_State->Close(); }
 HWND Host::Window() const { return m_State ? m_State->window : nullptr; }
 
-void OpenEditor(HINSTANCE module, const std::wstring& shelfRoot, bool (*isLocked)(), void (*lockNow)()) noexcept
+void OpenEditor(HINSTANCE module, const std::wstring& shelfRoot, bool (*isLocked)(), void (*lockNow)(), void (*refreshShelf)(const std::wstring&)) noexcept
 {
 	try
 	{
@@ -499,6 +717,7 @@ void OpenEditor(HINSTANCE module, const std::wstring& shelfRoot, bool (*isLocked
 		options.shelfRoot = shelfRoot;
 		options.isLocked = isLocked;
 		options.lockNow = lockNow;
+		options.refreshShelf = refreshShelf;
 		options.reportError = [](const wchar_t* text)
 		{
 			MessageBoxW(nullptr, text, L"Rainmeter Cafe Lock - ShelfSuite", MB_OK | MB_ICONINFORMATION);

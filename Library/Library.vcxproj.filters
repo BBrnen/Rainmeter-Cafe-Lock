@@ -262,6 +262,14 @@
     <ClCompile Include="CafeShelf\Controller.cpp"><Filter>CafeShelf</Filter></ClCompile>
     <ClCompile Include="CafeShelf\Selection.cpp"><Filter>CafeShelf</Filter></ClCompile>
     <ClCompile Include="CafeShelf\Host.cpp"><Filter>CafeShelf</Filter></ClCompile>
+    <ClCompile Include="CafeShelf\Launcher.cpp"><Filter>CafeShelf</Filter></ClCompile>
+    <ClInclude Include="CafeShelf\Launcher.h"><Filter>CafeShelf</Filter></ClInclude>
+    <ClCompile Include="CafeShelf\Icons.cpp"><Filter>CafeShelf</Filter></ClCompile>
+    <ClInclude Include="CafeShelf\Icons.h"><Filter>CafeShelf</Filter></ClInclude>
+    <ClCompile Include="CafeShelf\Config.cpp"><Filter>CafeShelf</Filter></ClCompile>
+    <ClInclude Include="CafeShelf\Config.h"><Filter>CafeShelf</Filter></ClInclude>
+    <ClCompile Include="CafeShelf\Storage.cpp"><Filter>CafeShelf</Filter></ClCompile>
+    <ClInclude Include="CafeShelf\Storage.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Json.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Types.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Session.h"><Filter>CafeShelf</Filter></ClInclude>

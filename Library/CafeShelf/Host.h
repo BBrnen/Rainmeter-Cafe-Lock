@@ -15,6 +15,7 @@ struct HostOptions
 	std::wstring shelfRoot;
 	std::function<bool()> isLocked;
 	std::function<void()> lockNow;
+	std::function<void(const std::wstring&)> refreshShelf;
 	std::function<void(const wchar_t*)> reportError;
 	// Dependency seam for standalone lifecycle tests. Production leaves it empty.
 	std::function<HRESULT(LPCWSTR, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*)> createEnvironment;
@@ -40,6 +41,6 @@ private:
 // Rainmeter entry points: no web-callable/exported editing or unlocking API.
 bool TryOpen(const wchar_t* file);
 void OpenEditor(HINSTANCE module, const std::wstring& shelfRoot,
-	bool (*isLocked)(), void (*lockNow)()) noexcept;
+	bool (*isLocked)(), void (*lockNow)(), void (*refreshShelf)(const std::wstring&)) noexcept;
 void RevokeAndClose() noexcept;
 }

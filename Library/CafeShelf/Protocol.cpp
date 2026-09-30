@@ -106,7 +106,27 @@ Result<Request> DecodeRequest(const std::string& utf8)
 		const auto& op = json["op"].get_ref<const std::string&>();
 		const auto& payload = json["payload"];
 		Operation operation;
-		if (op == "importDrop")
+		if (op == "saveEdits")
+		{
+			if (payload.size()!=4 || !payload.contains("shelf") || !payload["shelf"].is_string() ||
+				!payload.contains("version") || !payload["version"].is_string() ||
+				!payload.contains("iconId") || !payload["iconId"].is_number_unsigned() ||
+				payload["iconId"].get<uint64_t>()>9007199254740991ULL ||
+				!payload.contains("edit") || !payload["edit"].is_object()) return result;
+			const auto& edit=payload["edit"];
+			if(edit.size()!=6 || !edit.contains("kind") || !edit["kind"].is_string() ||
+				!edit.contains("tab") || !edit["tab"].is_number_unsigned() ||
+				!edit.contains("item") || !edit["item"].is_number_unsigned() ||
+				!edit.contains("label") || !edit["label"].is_string() ||
+				!edit.contains("action") || !edit["action"].is_string() ||
+				!edit.contains("icon") || !edit["icon"].is_string()) return result;
+			const auto kind=edit["kind"].get<std::string>();
+			if(kind!="setItem" && kind!="addItem" && kind!="removeItem" &&
+				kind!="renameTab" && kind!="addTab" && kind!="removeTab") return result;
+			if(edit["tab"].get<uint64_t>()>100000 || edit["item"].get<uint64_t>()>100000) return result;
+			operation=Operation::SaveEdits;
+		}
+		else if (op == "importDrop")
 		{
 			if (payload.size() != 1 || !payload.contains("purpose") ||
 				!payload["purpose"].is_string()) return result;
@@ -125,8 +145,7 @@ Result<Request> DecodeRequest(const std::string& utf8)
 			else if (op == "lockNow") operation = Operation::LockNow;
 			else
 			{
-				// saveEdits is deliberately unavailable until its typed schema
-				// and transactional storage are implemented together.
+				// Unknown operations never reach native dispatch.
 				result.code = Error::Unsupported;
 				return result;
 			}

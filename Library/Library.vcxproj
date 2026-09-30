@@ -59,6 +59,26 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
+    <ClCompile Include="CafeShelf\Storage.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="CafeShelf\Config.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="CafeShelf\Icons.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="CafeShelf\Launcher.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="CafeLock.cpp" />
     <ClCompile Include="CommandHandler.cpp" />
     <ClCompile Include="ConfigParser.cpp" />
@@ -156,6 +176,10 @@
     <ResourceCompile Include="Library.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CafeShelf\Launcher.h" />
+    <ClInclude Include="CafeShelf\Icons.h" />
+    <ClInclude Include="CafeShelf\Config.h" />
+    <ClInclude Include="CafeShelf\Storage.h" />
     <ClInclude Include="CafeShelf\Json.h" />
     <ClInclude Include="CafeShelf\Types.h" />
     <ClInclude Include="CafeShelf\Session.h" />

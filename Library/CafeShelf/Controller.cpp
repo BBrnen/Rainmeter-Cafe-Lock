@@ -38,7 +38,7 @@ Result<SelectionId> Controller::Remember(Ticket ticket, const SelectedFile& file
 	if (file.path.empty() || file.path.size() > MaxStringUnits || file.path.find(L'\0') != std::wstring::npos)
 		return result;
 	// JSON numbers must remain exactly representable in JavaScript.
-	if (m_NextSelection == 9007199254740991ULL) { result.code = Error::Unsupported; return result; }
+	if (m_Selections.size() >= 64 || m_NextSelection == 9007199254740991ULL) { result.code = Error::Unsupported; return result; }
 	result.value = ++m_NextSelection;
 	m_Selections.emplace(result.value, file);
 	result.ok = true;

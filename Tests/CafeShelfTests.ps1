@@ -85,8 +85,10 @@ try {
             $compilerArgs += @(
                 '/MT', "/I$sdk/build/native/include",
                 "$repo/Library/CafeShelf/Host.cpp", "$repo/Library/CafeShelf/Selection.cpp",
+                "$repo/Library/CafeShelf/Launcher.cpp", "$repo/Library/CafeShelf/Icons.cpp",
+                "$repo/Library/CafeShelf/Config.cpp", "$repo/Library/CafeShelf/Storage.cpp",
                 '/link', "$sdk/build/native/x64/WebView2LoaderStatic.lib",
-                'advapi32.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib', 'shell32.lib', 'shlwapi.lib', 'uuid.lib', 'version.lib'
+                'advapi32.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib', 'shell32.lib', 'shlwapi.lib', 'uuid.lib', 'version.lib', 'windowscodecs.lib', 'gdi32.lib', 'bcrypt.lib'
             )
         }
         & cl.exe @compilerArgs
