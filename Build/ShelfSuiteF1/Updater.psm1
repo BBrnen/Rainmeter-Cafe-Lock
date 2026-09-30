@@ -49,4 +49,88 @@ function Read-F1Package([string]$PackageDirectory) {
         return $m
     } catch { throw 'Compatibility package is missing, redirected, corrupt or unrecognized. Extract a fresh verified ZIP.' }
 }
-Export-ModuleMember -Function Read-F1Package
+if (-not ('CafeF1FileInfo' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class CafeF1FileInfo {
+    [StructLayout(LayoutKind.Sequential)] struct Info {
+        public uint Attributes; public System.Runtime.InteropServices.ComTypes.FILETIME Created,Accessed,Written;
+        public uint Volume,SizeHigh,SizeLow,Links,IndexHigh,IndexLow;
+    }
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    static extern SafeFileHandle CreateFile(string path,uint access,uint share,IntPtr security,uint mode,uint flags,IntPtr template);
+    [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetFileInformationByHandle(SafeFileHandle file,out Info info);
+    public static string Identity(string path) {
+        using (var file=CreateFile(path,0,7,IntPtr.Zero,3,0x02200000,IntPtr.Zero)) {
+            Info info;
+            if(file.IsInvalid || !GetFileInformationByHandle(file,out info)) throw new Win32Exception();
+            if((info.Attributes & 0x400)!=0 || info.Links!=1) throw new InvalidOperationException("Linked file refused");
+            return info.Volume.ToString("X8")+":"+info.IndexHigh.ToString("X8")+info.IndexLow.ToString("X8");
+        }
+    }
+}
+'@
+}
+function Get-F1Identity([string]$Path) { $full=Assert-F1PlainPath $Path; return [CafeF1FileInfo]::Identity($full) }
+function Read-F1Target([string]$Root,[string]$RelativePath) {
+    if ($RelativePath -cnotmatch '^(@Resources/(ShelfEngine\.lua|Variables\.inc)|Shelf[1-9][0-9]*/Shelf\.ini)$') { throw 'Undeclared target refused.' }
+    try {
+        $path=Assert-F1PlainPath (Join-Path $Root $RelativePath)
+        $identity=Get-F1Identity $path
+        $stream=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+        try {
+            if ($stream.Length -gt 1048576) { throw 'Unrecognized oversized source.' }
+            $memory=New-Object IO.MemoryStream
+            try { $stream.CopyTo($memory); $bytes=$memory.ToArray() } finally { $memory.Dispose() }
+            if ((Get-F1Identity $path) -cne $identity) { throw 'Changed file.' }
+        } finally { $stream.Dispose() }
+        return [pscustomobject]@{ Bytes=$bytes; Identity=$identity }
+    } catch { throw "$RelativePath is missing, busy, unreadable, linked or changed. No update was applied." }
+}
+function Get-F1Preflight([string]$Root,$Package) {
+    try { $rootPath=Assert-F1PlainPath $Root } catch { throw 'Shelf Suite directory is missing, non-local or redirected.' }
+    if (-not [IO.Directory]::Exists($rootPath) -or [IO.Path]::GetFileName($rootPath.TrimEnd('\')) -cne 'Shelf Suite') { throw 'Choose the existing directory named Shelf Suite.' }
+    $packageInfo=Read-F1Package $Package.PackageDirectory
+    if ($packageInfo.PackageDirectory.Equals($rootPath,[StringComparison]::OrdinalIgnoreCase) -or $packageInfo.PackageDirectory.StartsWith($rootPath+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Extract the compatibility ZIP outside Shelf Suite.' }
+    $directories=@{}; $current=$rootPath
+    while ($current) { $directories[$current]=Get-F1Identity $current; $current=[IO.Path]::GetDirectoryName($current) }
+    $directories[(Join-Path $rootPath '@Resources')]=Get-F1Identity (Join-Path $rootPath '@Resources')
+    $targets=New-Object Collections.Generic.List[string]
+    $targets.Add('@Resources/ShelfEngine.lua'); $targets.Add('@Resources/Variables.inc')
+    $shelves=@([IO.Directory]::EnumerateDirectories($rootPath) | Sort-Object)
+    $numbers=@{}
+    foreach ($dir in $shelves) {
+        $name=[IO.Path]::GetFileName($dir)
+        if ($name -notmatch '(?i)^Shelf[0-9]') { continue }
+        $number=0
+        if ($name -cnotmatch '^Shelf[1-9][0-9]*$' -or -not [int]::TryParse($name.Substring(5),[ref]$number) -or $numbers.ContainsKey($number)) { throw "$name has an ambiguous or unsupported shelf identifier." }
+        $numbers[$number]=$true
+        $directories[$dir]=Get-F1Identity $dir
+        $targets.Add($name+'/Shelf.ini')
+    }
+    if ($numbers.Count -eq 0) { throw 'No recognized Shelf<number> folders found.' }
+    $changes=New-Object Collections.Generic.List[object]
+    foreach ($rel in $targets) {
+        $source=Read-F1Target $rootPath $rel
+        $hash=Get-F1Hash $source.Bytes
+        $kind='Ini'; if ($rel.StartsWith('@Resources/',[StringComparison]::Ordinal)) { $kind='Shared' }
+        $matches=@($packageInfo.Recognition | Where-Object { $_.Kind -ceq $kind -and $_.InputHash -ceq $hash -and ($kind -ceq 'Ini' -or $_.Path -ceq $rel) })
+        if ($matches.Count -ne 1) { throw "$rel does not match a recognized ShelfSuite v2.1/F1 template, theme or encoding. Restore your known original or inspect it manually; it was not changed." }
+        $match=$matches[0]
+        if ($hash -ceq $match.OutputHash) { continue }
+        if ($kind -ceq 'Shared') {
+            $bytes=[IO.File]::ReadAllBytes((Join-Path $packageInfo.PackageDirectory $match.Payload))
+            if ($match.Newline -ceq 'CRLF') { $bytes=$script:Utf8.GetBytes($script:Utf8.GetString($bytes).Replace("`n","`r`n")) }
+        } else {
+            $nl="`n"; if ($match.Newline -ceq 'CRLF') { $nl="`r`n" }
+            $bytes=$script:Utf8.GetBytes($script:Utf8.GetString($source.Bytes).Replace("AccurateText=1$nl","AccurateText=1${nl}DynamicWindowSize=1$nl"))
+        }
+        if ((Get-F1Hash $bytes) -cne $match.OutputHash) { throw "$rel failed approved-output verification." }
+        $changes.Add([pscustomobject]@{ RelativePath=$rel; OriginalBytes=$source.Bytes; OutputBytes=$bytes; OriginalHash=$hash; OutputHash=$match.OutputHash; Identity=$source.Identity })
+    }
+    return [pscustomobject]@{ Root=$rootPath; PackageInfo=$packageInfo; Changes=@($changes.ToArray()); CheckedDirectories=$directories }
+}
+Export-ModuleMember -Function Read-F1Package,Get-F1Preflight
