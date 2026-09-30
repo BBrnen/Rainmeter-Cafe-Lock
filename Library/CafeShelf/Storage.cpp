@@ -1,5 +1,6 @@
 #include "Storage.h"
 #include <windows.h>
+#include <objbase.h>
 #include <bcrypt.h>
 #include <algorithm>
 #include <set>

@@ -1,5 +1,6 @@
 #include "Launcher.h"
 #include <windows.h>
+#include <shlobj.h>
 #include <shobjidl.h>
 #include <wrl.h>
 #include <vector>
