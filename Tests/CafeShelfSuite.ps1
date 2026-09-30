@@ -185,7 +185,7 @@ try {
   Write-Output 'PASS: native-saved quotes/HTML-like literal name survives loaded ShelfSuite/Rainmeter layers.'
   $shortLayout = Read-ShelfLayout $shortWindow
   Write-Output "ShelfSuite short layout: width=$($shortLayout.Width), gear=$($shortLayout.Gear.X), tab1=$($shortLayout.Tab1.X),$($shortLayout.Tab1.W), tab2=$($shortLayout.Tab2.X),$($shortLayout.Tab2.W)"
-  if ($shortLayout.Width -ne 480 -or $shortLayout.Tab1.W -ne 85 -or $shortLayout.Tab2.X -lt ($shortLayout.Tab1.X + $shortLayout.Tab1.W + 10) -or $shortLayout.Gear.X -ne ($shortLayout.Width - 28)) {
+  if ($shortLayout.Width -ne 480 -or $shortLayout.Tab1.W -ne 85 -or $shortLayout.Tab2.X -lt ($shortLayout.Tab1.X + $shortLayout.Tab1.W + 10) -or $shortLayout.Gear.X -ne ($shortLayout.Width - 35)) {
     throw 'Short ShelfSuite tabs did not retain the 85 px minimum, spacing, 480 px shelf, and aligned gear'
   }
   $longLayout = Read-ShelfLayout $longWindow
@@ -193,7 +193,7 @@ try {
   if ($longLayout.Tab1.W -lt ($longLayout.Text1.W + 24) -or $longLayout.Tab2.X -lt ($longLayout.Tab1.X + $longLayout.Tab1.W + 10)) {
     throw 'Long ShelfSuite tab did not fit SCHOOL/WORK with 12 px side padding and spacing'
   }
-  if ($longLayout.Width -le 480 -or $longLayout.Tab5.X -lt ($longLayout.Tab4.X + $longLayout.Tab4.W + 10) -or $longLayout.Gear.X -ne ($longLayout.Width - 28)) {
+  if ($longLayout.Width -le 480 -or $longLayout.Tab5.X -lt ($longLayout.Tab4.X + $longLayout.Tab4.W + 10) -or $longLayout.Gear.X -ne ($longLayout.Width - 35)) {
     throw 'Five long ShelfSuite tabs did not expand the shelf and keep the gear aligned'
   }
   Write-Output 'PASS: ShelfSuite tab layout measures text, preserves the short 480 px layout, prevents overlap, and expands only when five long tabs require it.'
