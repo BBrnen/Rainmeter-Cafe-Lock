@@ -17,7 +17,9 @@ NSIS 3.11. GitHub Actions performs those steps and tests the result.
    ordinary Rainmeter settings and file associations are not overwritten.
 4. Right-click its tray icon, choose Unlock / Enter Maintenance Mode, and create
    the local password before customer use. In Maintenance, configure skins and
-   ShelfSuite using normal Rainmeter controls. ShelfSuite is not bundled or modified.
+   ShelfSuite using normal Rainmeter controls. Its settings gear opens the integrated
+   editor with Add/Edit, Browse/drop and automatic icons. ShelfSuite is not bundled;
+   the pinned installed skin engine and assets are retained.
 5. Select Lock Now. Setup enables automatic startup for all Windows users via the
    shared Startup folder. It starts locked after sign-in, not before the login
    screen, and runs as that user. Configure the password in each cafe account before
@@ -58,6 +60,33 @@ Uninstall via Windows Apps or Uninstall.exe. Only packaged files, the Cafe Lock
 Start menu/sign-in shortcuts and its own uninstall registration are removed. User profiles,
 passwords, skins and unknown files are retained. No recursive profile deletion or
 file-association takeover is performed.
+
+## Optional editor prerequisite
+
+Setup bundles Microsoft's signed Evergreen standalone x64 WebView2 installer for
+offline use. The build rejects mismatched SHA-256, file version or Authenticode
+signer. `Notices/WebView2-runtime-manifest.json` records those exact values; SDK
+and ShelfSuite license notices accompany the installed payload and source archive.
+The bundled payload reference is recorded separately from its installer version.
+Evergreen may subsequently update independently through Microsoft's updater.
+
+When Runtime is detected, setup skips it. If missing, interactive setup asks
+whether to install it; No is the default. Silent setup leaves it alone unless
+the administrator explicitly supplies `/INSTALLWEBVIEW2=1`. After an attempted
+installation, setup checks the result and Runtime presence; failure returns 1603
+with an explanation while leaving Rainmeter installed. A restart-required result
+is accepted only when the Runtime is detected. Setup never launches Rainmeter
+elevated, and uninstall never removes the shared Microsoft Runtime.
+
+Opening the editor never downloads/installs a prerequisite. If Runtime is missing,
+existing launchers still work and the editor shows an actionable error. Check it
+in the intended standard-user cafe account: a Runtime installed only for a
+different Windows user may not be available there. The Windows installer uses
+Microsoft's documented HKLM/HKCU detection and standalone `/silent /install` flow:
+https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution.
+
+Final editor acceptance and supported-config limits are recorded in
+`Docs/CafeLock-Usability-Verification.md`.
 
 ## Validation boundary
 

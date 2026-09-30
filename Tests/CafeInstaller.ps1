@@ -47,6 +47,14 @@ foreach ($path in @('Rainmeter.exe','Rainmeter.dll','SkinInstaller.exe','Restart
  if (-not (Test-Path "$installed/$path")) { throw "Missing installed file: $path" }
 }
 if (Test-Path "$installed/RainmeterCafeMaintenance.exe") { throw 'Obsolete UAC helper packaged' }
+$runtimeManifest = Get-Content "$installed/Notices/WebView2-runtime-manifest.json" -Raw | ConvertFrom-Json
+$runtimePin = Get-Content "$repo/Build/CafeDependencies/runtime.json" -Raw | ConvertFrom-Json
+if ($runtimeManifest.Sha256 -ne $runtimePin.sha256 -or $runtimeManifest.SignerThumbprint -ne $runtimePin.signerThumbprint -or
+ $runtimeManifest.InstallerFileVersion -ne $runtimePin.installerFileVersion -or $runtimeManifest.PSObject.Properties.Name -contains 'Path') {
+ throw 'Runtime provenance is missing, incorrect or contains a builder-local path'
+}
+if (Test-Path "$installed/MicrosoftEdgeWebView2RuntimeInstallerX64.exe") { throw 'Temporary prerequisite installer retained in application directory' }
+Write-Output 'PASS: installed SDK/ShelfSuite notices and exact Runtime provenance without builder-local paths.'
 $key = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock'
 if (-not (Test-Path $key)) { throw 'Uninstall registration missing' }
 $link = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Rainmeter Cafe Lock/Rainmeter Cafe Lock.lnk'

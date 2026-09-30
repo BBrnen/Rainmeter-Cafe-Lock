@@ -3,6 +3,9 @@ Unicode true
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
+!include "RuntimePolicy.nsh"
+Var RuntimePresent
 !ifndef PAYLOAD
  !error "PAYLOAD and OUTFILE must be supplied by Package.ps1"
 !endif
@@ -47,6 +50,24 @@ FunctionEnd
  System::Call 'kernel32::CloseHandle(p r0)'
 !macroend
 
+Function DetectRuntime
+ ; Microsoft documents HKLM's 32-bit view and HKCU for Evergreen detection.
+ StrCpy $RuntimePresent 0
+ SetRegView 32
+ ReadRegStr $0 HKLM "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+ ${If} $0 != ""
+ ${AndIf} $0 != "0.0.0.0"
+  StrCpy $RuntimePresent 1
+ ${Else}
+  ReadRegStr $0 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${If} $0 != ""
+  ${AndIf} $0 != "0.0.0.0"
+   StrCpy $RuntimePresent 1
+  ${EndIf}
+ ${EndIf}
+ SetRegView 64
+FunctionEnd
+
 Section "Install"
  ; Fixed protected location, including silent installs. No writable portable target.
  StrCpy $INSTDIR "$PROGRAMFILES64\Rainmeter Cafe Lock"
@@ -74,6 +95,53 @@ Section "Install"
  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock" "DisplayIcon" "$INSTDIR\Rainmeter.exe,0"
  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock" "NoModify" 1
  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rainmeter Cafe Lock" "NoRepair" 1
+SectionEnd
+
+Section "Optional WebView2 prerequisite"
+ Call DetectRuntime
+ StrCpy $3 0
+ IfSilent 0 +2
+ StrCpy $3 1
+ ${GetParameters} $4
+ ${GetOptions} $4 "/INSTALLWEBVIEW2=" $5
+ StrCpy $4 0
+ ${If} $5 == "1"
+  StrCpy $4 1
+ ${EndIf}
+ Push $RuntimePresent
+ Push $3
+ Push $4
+ Call RuntimeDecision
+ Pop $3
+ ${If} $3 == 0
+  Goto runtime_done
+ ${ElseIf} $3 == 2
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "The ShelfSuite editor needs Microsoft WebView2 Runtime. Install the bundled Microsoft prerequisite now? It works offline. Choosing No leaves normal Rainmeter launchers usable; the editor will explain the missing prerequisite." /SD IDNO IDYES runtime_install
+  Goto runtime_done
+ ${EndIf}
+ runtime_install:
+ InitPluginsDir
+ SetOutPath "$PLUGINSDIR"
+ ; Package.ps1 verifies digest/version/Authenticode before these bytes are embedded.
+ File /oname=MicrosoftEdgeWebView2RuntimeInstallerX64.exe "${RUNTIME_INSTALLER}"
+ ClearErrors
+ ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" /silent /install' $6
+ ${If} ${Errors}
+  StrCpy $6 1603
+ ${EndIf}
+ Call DetectRuntime
+ Push $6
+ Push $RuntimePresent
+ Call RuntimeInstallResult
+ Pop $3
+ Delete "$PLUGINSDIR\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+ ${If} $3 != 1
+  DetailPrint "WebView2 setup did not complete (exit $6). Rainmeter is installed; editor prerequisite still needs attention."
+  MessageBox MB_ICONEXCLAMATION "Rainmeter Cafe Lock is installed, but WebView2 setup failed (exit $6). Existing launchers remain usable. Install or repair Microsoft WebView2 Runtime before using the ShelfSuite editor." /SD IDOK
+  SetErrorLevel 1603
+  Quit
+ ${EndIf}
+ runtime_done:
 SectionEnd
 
 Function un.onInit

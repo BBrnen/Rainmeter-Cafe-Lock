@@ -63,10 +63,13 @@ Before deployment, on a spare PC or VM:
    application-blocking prompt or abnormal delay. Repeat with a password dialog
    open, and cancel a shutdown once to confirm the application remains usable.
 3. Unlock, restart Windows, and confirm Maintenance Mode did not persist.
-4. In Maintenance Mode, open the actual ShelfSuite configurator in the intended
-   browser, save a normal configuration, and refresh the shelf. Confirm the
-   settings gear is blocked again after Lock Now. CI verifies launch dispatch,
-   not browser-specific file permissions or the configurator's save UI.
+4. In Maintenance Mode, open the integrated ShelfSuite editor through its gear,
+   Browse/drop a launcher and icon, save, and click the launcher. Confirm the
+   settings gear is blocked again after Lock Now. Repeat the full A1-A12 checklist
+   in `Docs/CafeLock-Usability-Verification.md`, including Lock Now during a picker
+   or import, theme/shelf operations and missing-Runtime optional setup on a
+   separate disposable VM. Real WebView harness tests cover saving, but do not
+   replace production standard-user desktop acceptance.
 
 These physical/session and browser checks must be recorded separately; they are
 not implied by a green CI run. Do not restart or sign out an active user's PC as
