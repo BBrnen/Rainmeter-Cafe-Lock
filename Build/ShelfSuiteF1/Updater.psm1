@@ -56,6 +56,8 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 public static class CafeF1FileInfo {
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool CreateDirectory(string path,IntPtr security);
+    public static void NewDirectory(string path) { if(!CreateDirectory(path,IntPtr.Zero)) throw new Win32Exception(); }
     [StructLayout(LayoutKind.Sequential)] struct Info {
         public uint Attributes; public System.Runtime.InteropServices.ComTypes.FILETIME Created,Accessed,Written;
         public uint Volume,SizeHigh,SizeLow,Links,IndexHigh,IndexLow;
@@ -133,4 +135,104 @@ function Get-F1Preflight([string]$Root,$Package) {
     }
     return [pscustomobject]@{ Root=$rootPath; PackageInfo=$packageInfo; Changes=@($changes.ToArray()); CheckedDirectories=$directories }
 }
-Export-ModuleMember -Function Read-F1Package,Get-F1Preflight
+function Assert-F1RainmeterClosed {
+    try { $processes=@([Diagnostics.Process]::GetProcesses()); foreach ($p in $processes) { try { if ($p.ProcessName.Equals('Rainmeter',[StringComparison]::OrdinalIgnoreCase)) { throw 'Running' } } finally { $p.Dispose() } } }
+    catch { throw 'Close Rainmeter normally before updating. If process inspection is unavailable, no update can be applied.' }
+}
+function Assert-F1Directories($Plan) {
+    foreach ($path in $Plan.CheckedDirectories.Keys) { if ((Get-F1Identity $path) -cne $Plan.CheckedDirectories[$path]) { throw 'A checked directory changed or was redirected. Update stopped.' } }
+}
+function Get-F1BackupName([string]$Root) {
+    return Join-Path ([IO.Path]::GetDirectoryName($Root)) ('Shelf Suite-F1-Backup-'+[DateTime]::Now.ToString('yyyyMMdd-HHmmss-fffffff')+'-'+[Guid]::NewGuid().ToString('N'))
+}
+function Write-F1New([string]$Path,[byte[]]$Bytes) {
+    $parent=[IO.Path]::GetDirectoryName($Path)
+    $missing=New-Object Collections.Generic.List[string]; $current=$parent
+    while (-not [IO.Directory]::Exists($current)) { $missing.Add($current); $current=[IO.Path]::GetDirectoryName($current) }
+    Assert-F1PlainPath $current | Out-Null
+    for ($i=$missing.Count-1; $i -ge 0; $i--) { [CafeF1FileInfo]::NewDirectory($missing[$i]); Assert-F1PlainPath $missing[$i] | Out-Null }
+    Assert-F1PlainPath $parent | Out-Null
+    $file=[IO.File]::Open($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+    try { $file.Write($Bytes,0,$Bytes.Length); $file.Flush($true) } finally { $file.Dispose() }
+}
+function Read-F1Backup([string]$Path) { Get-F1Identity $Path | Out-Null; return ,([IO.File]::ReadAllBytes($Path)) }
+function Replace-F1File([string]$Source,[string]$Target) {
+    Get-F1Identity $Source | Out-Null; Get-F1Identity $Target | Out-Null
+    [IO.File]::Replace($Source,$Target,[System.Management.Automation.Language.NullString]::Value)
+}
+function Invoke-F1Update($Plan) {
+    $backup=$null; $changed=New-Object Collections.Generic.List[object]; $manual=New-Object Collections.Generic.List[string]; $errors=New-Object Collections.Generic.List[string]
+    try {
+        $principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+        if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run this updater normally, not as administrator.' }
+        Assert-F1RainmeterClosed
+        Assert-F1Directories $Plan
+        $fresh=Get-F1Preflight $Plan.Root $Plan.PackageInfo
+        if ($fresh.Changes.Count -ne $Plan.Changes.Count) { throw 'Installation changed after confirmation. Rerun the updater.' }
+        foreach ($c in $fresh.Changes) {
+            $prior=@($Plan.Changes | Where-Object { $_.RelativePath -ceq $c.RelativePath })
+            if ($prior.Count -ne 1 -or $prior[0].OriginalHash -cne $c.OriginalHash -or $prior[0].OutputHash -cne $c.OutputHash -or $prior[0].Identity -cne $c.Identity) { throw 'Installation changed after confirmation. Rerun the updater.' }
+        }
+        if ($fresh.Changes.Count -eq 0) { return [pscustomobject]@{Status='NoAction';BackupDirectory=$null;ChangedPaths=@();ManualRecoveryPaths=@();Errors=@()} }
+        $Plan=$fresh
+        $candidate=[IO.Path]::GetFullPath((Get-F1BackupName $Plan.Root))
+        if ([IO.Path]::GetDirectoryName($candidate) -cne [IO.Path]::GetDirectoryName($Plan.Root) -or [IO.Path]::GetFileName($candidate) -ceq 'Shelf Suite') { throw 'Unsafe backup location refused.' }
+        Assert-F1Directories $Plan
+        [CafeF1FileInfo]::NewDirectory($candidate)
+        $backup=$candidate; $backupIdentity=Get-F1Identity $backup
+        $record=@()
+        foreach ($c in $Plan.Changes) {
+            Assert-F1Directories $Plan
+            $source=Read-F1Target $Plan.Root $c.RelativePath
+            if ($source.Identity -cne $c.Identity -or (Get-F1Hash $source.Bytes) -cne $c.OriginalHash) { throw "$($c.RelativePath) changed before backup." }
+            Write-F1New "$backup/original/$($c.RelativePath)" $source.Bytes
+            if ((Get-F1Hash (Read-F1Backup "$backup/original/$($c.RelativePath)")) -cne $c.OriginalHash) { throw "$($c.RelativePath) backup verification failed." }
+            $record += [ordered]@{RelativePath=$c.RelativePath;OriginalHash=$c.OriginalHash;OutputHash=$c.OutputHash}
+        }
+        Write-F1New "$backup/recovery.json" $script:Utf8.GetBytes(([ordered]@{SchemaVersion=1;Files=$record}|ConvertTo-Json -Depth 5))
+        $instructions="Close Rainmeter normally. Keep this backup. Inspect unexpected current edits before restoring.`r`nCopy ONLY each listed original file from original/ to the same relative path in your existing Shelf Suite.`r`nDo not replace the whole skin or copy any launcher configuration.`r`nFiles:`r`n"+(@($record|ForEach-Object {$_.RelativePath}) -join "`r`n")
+        Write-F1New "$backup/RESTORE.txt" $script:Utf8.GetBytes($instructions)
+        foreach ($c in $Plan.Changes) {
+            Write-F1New "$backup/staged/$($c.RelativePath)" $c.OutputBytes
+            if ((Get-F1Hash (Read-F1Backup "$backup/staged/$($c.RelativePath)")) -cne $c.OutputHash) { throw "$($c.RelativePath) staged output verification failed." }
+        }
+        foreach ($c in $Plan.Changes) {
+            Assert-F1RainmeterClosed; Assert-F1Directories $Plan
+            if ((Get-F1Identity $backup) -cne $backupIdentity) { throw 'Backup directory changed.' }
+            $source=Read-F1Target $Plan.Root $c.RelativePath
+            if ($source.Identity -cne $c.Identity -or (Get-F1Hash $source.Bytes) -cne $c.OriginalHash) { throw "$($c.RelativePath) changed before replacement." }
+            if ((Get-F1Hash (Read-F1Backup "$backup/staged/$($c.RelativePath)")) -cne $c.OutputHash) { throw "$($c.RelativePath) staged output changed." }
+            $changed.Add($c)
+            Replace-F1File "$backup/staged/$($c.RelativePath)" (Join-Path $Plan.Root $c.RelativePath)
+            $output=Read-F1Target $Plan.Root $c.RelativePath
+            $c | Add-Member -NotePropertyName WrittenIdentity -NotePropertyValue $output.Identity
+            if ((Get-F1Hash $output.Bytes) -cne $c.OutputHash) { throw "$($c.RelativePath) output verification failed." }
+        }
+        return [pscustomobject]@{Status='Updated';BackupDirectory=$backup;ChangedPaths=@($changed|ForEach-Object {$_.RelativePath});ManualRecoveryPaths=@();Errors=@()}
+    } catch {
+        # All thrown diagnostics above contain paths/reasons, never source text.
+        $errors.Add('Update could not complete: '+$_.Exception.Message)
+        for ($i=$changed.Count-1; $i -ge 0; $i--) {
+            $c=$changed[$i]
+            try {
+                Assert-F1RainmeterClosed; Assert-F1Directories $Plan
+                if ((Get-F1Identity $backup) -cne $backupIdentity) { throw 'Backup changed.' }
+                $current=Read-F1Target $Plan.Root $c.RelativePath
+                $hash=Get-F1Hash $current.Bytes
+                if ($hash -ceq $c.OriginalHash -and $current.Identity -ceq $c.Identity) { continue }
+                if ($hash -cne $c.OutputHash) { throw 'Outside edit.' }
+                if ($c.PSObject.Properties['WrittenIdentity'] -and $current.Identity -cne $c.WrittenIdentity) { throw 'Outside replacement.' }
+                $original=Read-F1Backup "$backup/original/$($c.RelativePath)"
+                if ((Get-F1Hash $original) -cne $c.OriginalHash) { throw 'Backup corrupt.' }
+                Write-F1New "$backup/restore/$($c.RelativePath)" $original
+                $last=Read-F1Target $Plan.Root $c.RelativePath
+                if ($last.Identity -cne $current.Identity -or (Get-F1Hash $last.Bytes) -cne $c.OutputHash) { throw 'Target changed during recovery.' }
+                Replace-F1File "$backup/restore/$($c.RelativePath)" (Join-Path $Plan.Root $c.RelativePath)
+                if ((Get-F1Hash (Read-F1Target $Plan.Root $c.RelativePath).Bytes) -cne $c.OriginalHash) { throw 'Restoration verification failed.' }
+            } catch { $manual.Add($c.RelativePath); $errors.Add("$($c.RelativePath): automatic restoration is unsafe or failed; inspect and restore manually from the verified original backup.") }
+        }
+        $status='FailedRecovered'; if ($manual.Count) { $status='ManualRecoveryRequired' }
+        return [pscustomobject]@{Status=$status;BackupDirectory=$backup;ChangedPaths=@($changed|ForEach-Object {$_.RelativePath});ManualRecoveryPaths=@($manual.ToArray());Errors=@($errors.ToArray())}
+    }
+}
+Export-ModuleMember -Function Read-F1Package,Get-F1Preflight,Invoke-F1Update

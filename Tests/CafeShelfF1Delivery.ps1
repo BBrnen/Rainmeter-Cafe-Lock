@@ -173,10 +173,10 @@ if ($Suite -in @('Preflight','All')) {
         try { Assert-Refused { Get-F1Preflight $root (Read-F1Package $PackageDirectory) } 'busy INI' } finally { $hold.Dispose() }
     }
     Test-Case 'UnreadableIniRefused' {
-        $root=Skin; $file="$root/Shelf2/Shelf.ini"; $acl=Get-Acl -LiteralPath $file
+        $root=Skin; $file="$root/Shelf2/Shelf.ini"; $acl=[IO.File]::GetAccessControl($file)
         $deny=New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User,'Read','Deny')
-        $limited=Get-Acl -LiteralPath $file; $limited.AddAccessRule($deny); Set-Acl -LiteralPath $file -AclObject $limited
-        try { Assert-Refused { Get-F1Preflight $root (Read-F1Package $PackageDirectory) } 'unreadable INI' } finally { Set-Acl -LiteralPath $file -AclObject $acl }
+        $limited=[IO.File]::GetAccessControl($file); $limited.AddAccessRule($deny); [IO.File]::SetAccessControl($file,$limited)
+        try { Assert-Refused { Get-F1Preflight $root (Read-F1Package $PackageDirectory) } 'unreadable INI' } finally { [IO.File]::SetAccessControl($file,$acl) }
     }
     Test-Case 'RedirectedShelfRefused' {
         $root=Skin; [IO.Directory]::Move("$root/Shelf2","$root/Other2")
@@ -196,5 +196,101 @@ if ($Suite -in @('Preflight','All')) {
         Assert-Refused { Get-F1Preflight "$scratch/junction/Shelf Suite" (Read-F1Package $PackageDirectory) } 'redirected ancestor'
     }
     Test-Case 'NetworkRootRefused' { Assert-Refused { Get-F1Preflight '\\localhost\not-a-share\Shelf Suite' (Read-F1Package $PackageDirectory) } 'network path' }
+}
+if ($Suite -in @('Apply','All')) {
+    Import-Module "$PackageDirectory/Updater.psm1" -Force
+    Assert-True ($null -ne (Get-Command Invoke-F1Update -ErrorAction SilentlyContinue)) 'verified backup/apply must exist'
+    function Apply-Skin { return New-SkinFixture (Join-Path $scratch ([Guid]::NewGuid().ToString('N'))) $upstream }
+    function Apply-Module {
+        Import-Module "$PackageDirectory/Updater.psm1" -Force
+        $m=Get-Module Updater
+        & $m { function script:Assert-F1RainmeterClosed {} }
+        return $m
+    }
+    Test-Case 'OnlyChangedFilesBackedUp' {
+        $root=Apply-Skin; Apply-Module | Out-Null
+        $p=Get-F1Preflight $root (Read-F1Package $PackageDirectory); $r=Invoke-F1Update $p
+        Assert-True ($r.Status -eq 'Updated' -and $r.ChangedPaths.Count -eq 5) 'update failed'
+        $files=@(Get-ChildItem "$($r.BackupDirectory)/original" -Recurse -File)
+        Assert-True ($files.Count -eq 5) 'backup copied unrelated files'
+        foreach ($c in $p.Changes) {
+            Assert-True ((Hash-Bytes ([IO.File]::ReadAllBytes("$($r.BackupDirectory)/original/$($c.RelativePath)"))) -eq $c.OriginalHash) 'backup hash mismatch'
+            Assert-True ((Hash-Bytes ([IO.File]::ReadAllBytes("$root/$($c.RelativePath)"))) -eq $c.OutputHash) 'output hash mismatch'
+        }
+        Assert-True ([IO.File]::ReadAllText("$root/Shelf1/config.lua") -eq 'PRIVATE-SENTINEL-never-read-by-updater') 'harness sentinel changed'
+        $record=Get-Content "$($r.BackupDirectory)/recovery.json" -Raw | ConvertFrom-Json
+        Assert-True (@($record.Files).Count -eq 5 -and (Get-Content "$($r.BackupDirectory)/RESTORE.txt" -Raw).IndexOf('PRIVATE-SENTINEL') -lt 0) 'recovery record exposed contents'
+    }
+    Test-Case 'BackupsVerifiedBeforeFirstReplacement' {
+        $root=Apply-Skin; $m=Apply-Module; $p=Get-F1Preflight $root (Read-F1Package $PackageDirectory)
+        & $m { $script:RealReplace=(Get-Command Replace-F1File).ScriptBlock; function script:Replace-F1File($Source,$Target) {
+            $backup=Split-Path (Split-Path (Split-Path $Source -Parent) -Parent) -Parent
+            $record=Get-Content "$backup/recovery.json" -Raw | ConvertFrom-Json
+            foreach ($f in $record.Files) { if ((Get-F1Hash ([IO.File]::ReadAllBytes("$backup/original/$($f.RelativePath)"))) -cne $f.OriginalHash) { throw 'Backup not verified before replace' } }
+            & $script:RealReplace $Source $Target
+        } }
+        Assert-True ((Invoke-F1Update $p).Status -eq 'Updated') 'all backups were not ready before first write'
+    }
+    Test-Case 'NoActionCreatesNothing' {
+        $root=Apply-Skin; Apply-Module | Out-Null; $p=Get-F1Preflight $root (Read-F1Package $PackageDirectory); Invoke-F1Update $p | Out-Null
+        $before=@([IO.Directory]::EnumerateDirectories((Split-Path $root -Parent)))
+        $r=Invoke-F1Update (Get-F1Preflight $root (Read-F1Package $PackageDirectory))
+        Assert-True ($r.Status -eq 'NoAction' -and -not $r.BackupDirectory) 'no-op made backup'
+        Assert-True (@(Compare-Object $before @([IO.Directory]::EnumerateDirectories((Split-Path $root -Parent)))).Count -eq 0) 'no-op writes'
+    }
+    Test-Case 'ChangedOrRedirectedTargetRefused' {
+        $root=Apply-Skin; Apply-Module | Out-Null; $p=Get-F1Preflight $root (Read-F1Package $PackageDirectory)
+        [IO.File]::AppendAllText("$root/Shelf2/Shelf.ini",'outside-edit')
+        $r=Invoke-F1Update $p
+        Assert-True ($r.ChangedPaths.Count -eq 0 -and -not $r.BackupDirectory) 'stale plan wrote files'
+    }
+    Test-Case 'TimestampCollisionNeverOverwrites' {
+        $root=Apply-Skin; $m=Apply-Module; $p=Get-F1Preflight $root (Read-F1Package $PackageDirectory)
+        $collision=Join-Path (Split-Path $root -Parent) 'existing-backup'; [IO.Directory]::CreateDirectory($collision) | Out-Null
+        & $m { param($fixed) $script:FixedBackup=$fixed; function script:Get-F1BackupName($Root) { return $script:FixedBackup } } $collision
+        $r=Invoke-F1Update $p
+        Assert-True ($r.ChangedPaths.Count -eq 0) 'existing backup overwritten'
+        Assert-True (@([IO.Directory]::EnumerateFileSystemEntries($collision)).Count -eq 0) 'collision directory modified'
+    }
+    foreach ($failure in @('BackupFailure','CorruptBackupBeforeApply','StagedOutputCorrupt','PartialFailure','OutsideEdit','CorruptBackupOnRecovery','RecoveryFailure','AppliedOutputCorrupt')) {
+        Test-Case $failure {
+            $root=Apply-Skin; $m=Apply-Module; $p=Get-F1Preflight $root (Read-F1Package $PackageDirectory)
+            & $m { param($mode) $script:FaultMode=$mode; $script:ReplaceCount=0; $script:WriteCount=0
+                $script:RealWrite=(Get-Command Write-F1New).ScriptBlock
+                $script:RealReplace=(Get-Command Replace-F1File).ScriptBlock
+                function script:Write-F1New($Path,$Bytes) {
+                    $script:WriteCount++
+                    if ($script:FaultMode -eq 'BackupFailure' -and $script:WriteCount -eq 2) { throw 'Injected backup failure' }
+                    if ($script:FaultMode -eq 'CorruptBackupBeforeApply' -and $Path -like '*/original/*') { $Bytes=[byte[]]@(1,2,3) }
+                    if ($script:FaultMode -eq 'StagedOutputCorrupt' -and $Path -like '*/staged/*') { $Bytes=[byte[]]@(1,2,3) }
+                    & $script:RealWrite $Path $Bytes
+                }
+                function script:Replace-F1File($Source,$Target) {
+                    $script:ReplaceCount++
+                    if ($script:ReplaceCount -eq 2 -and $script:FaultMode -in @('PartialFailure','OutsideEdit','CorruptBackupOnRecovery','RecoveryFailure')) {
+                        if ($script:FaultMode -eq 'OutsideEdit') { [IO.File]::AppendAllText($script:FirstTarget,'OUTSIDE-EDIT') }
+                        if ($script:FaultMode -eq 'CorruptBackupOnRecovery') { [IO.File]::WriteAllText($script:FirstSource.Replace('/staged/','/original/'),'CORRUPT') }
+                        throw 'Injected second replacement failure'
+                    }
+                    if ($script:ReplaceCount -gt 2 -and $script:FaultMode -eq 'RecoveryFailure') { throw 'Injected restore failure' }
+                    & $script:RealReplace $Source $Target
+                    if ($script:ReplaceCount -eq 1) { $script:FirstTarget=$Target; $script:FirstSource=$Source }
+                    if ($script:FaultMode -eq 'AppliedOutputCorrupt' -and $script:ReplaceCount -eq 1) { [IO.File]::AppendAllText($Target,'OUTSIDE-EDIT') }
+                }
+            } $failure
+            $r=Invoke-F1Update $p
+            if ($failure -in @('OutsideEdit','CorruptBackupOnRecovery','RecoveryFailure','AppliedOutputCorrupt')) {
+                Assert-True ($r.Status -eq 'ManualRecoveryRequired' -and $r.ManualRecoveryPaths.Count -ge 1) 'unsafe recovery was not reported'
+                Assert-True (Test-Path "$($r.BackupDirectory)/recovery.json") 'recovery record missing'
+            } else {
+                Assert-True ($r.Status -eq 'FailedRecovered') 'failed update did not recover safely'
+                foreach ($c in $p.Changes) { Assert-True ((Hash-Bytes ([IO.File]::ReadAllBytes("$root/$($c.RelativePath)"))) -eq $c.OriginalHash) 'failed run altered target' }
+            }
+            foreach ($rel in @('Shelf1/config.lua','Rainmeter.ini','CafeLock.ini','@Resources/Icons/owner.png','@Resources/Themes/owner.inc')) {
+                Assert-True ([IO.File]::ReadAllText("$root/$rel") -eq 'PRIVATE-SENTINEL-never-read-by-updater') 'unrelated fixture modified on failure'
+            }
+        }
+    }
+    Import-Module "$PackageDirectory/Updater.psm1" -Force
 }
 Write-Output "PASS: $script:Passed F1 delivery checks ($Suite); disposable fixtures: $scratch"
