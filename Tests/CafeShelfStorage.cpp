@@ -58,6 +58,30 @@ int wmain(int argc,wchar_t** argv) {
 	Check("hardlink fixture created", CreateHardLinkW(alias.c_str(),hard.c_str(),nullptr)!=FALSE);
 	Check("hardlinked config is read-only to editor", !storage.Load(L"Shelf1").ok);
 	DeleteFileW(alias.c_str());
+	loaded=storage.Load(L"Shelf1");
+	auto first=storage.Prepare(loaded.value,edit,&image.value,L"parallel");
+	auto second=storage.Prepare(loaded.value,edit,&image.value,L"parallel");
+	Check("simultaneous reservations use unique complete icons",first.ok && second.ok &&
+		Read(icons+L"\\parallel.png")==Read(icons+L"\\parallel-2.png") && !Read(icons+L"\\parallel.png").empty());
+	storage.Commit(first.value,[](){return false;}); storage.Commit(second.value,[](){return false;});
+	Check("cancelled reservations clean up only owned files",GetFileAttributesW((icons+L"\\parallel.png").c_str())==INVALID_FILE_ATTRIBUTES &&
+		GetFileAttributesW((icons+L"\\parallel-2.png").c_str())==INVALID_FILE_ATTRIBUTES && Read(icons+L"\\spotify.png")=="owner icon");
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	Check("prepared save pins shelf against redirection",prepared.ok && !MoveFileW(shelf.c_str(),(root+L"\\MovedShelf").c_str()));
+	storage.Commit(prepared.value,[](){return false;});
+	prepared=storage.Prepare(loaded.value,edit,&image.value,L"failed-save");
+	const auto beforeFailure=Read(hard);
+	SetFileAttributesW(hard.c_str(),FILE_ATTRIBUTE_READONLY);
+	auto readOnly=storage.Commit(prepared.value,[](){return true;});
+	Check("replacement failure keeps old config and removes new icon",!readOnly.ok && Read(hard)==beforeFailure &&
+		GetFileAttributesW((icons+L"\\failed-save.png").c_str())==INVALID_FILE_ATTRIBUTES);
+	SetFileAttributesW(hard.c_str(),FILE_ATTRIBUTE_NORMAL);
+	Check("redirected editing root rejected",!Storage(root+L"\\RedirectedRoot").Discover().ok);
+	// Inject an outside edit at the final authorization boundary: commit must not overwrite it.
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	int gates=0; const auto raced=Read(hard)+"\n-- final boundary edit\n";
+	auto race=storage.Commit(prepared.value,[&](){if(++gates==2)Write(hard,raced);return true;});
+	Check("final boundary edit is retained or blocked before replacement",(!race.ok && Read(hard)==raced) || (race.ok && Read(race.value.backup)==raced));
 	CoUninitialize();
 	std::cout<<checks<<" storage checks, "<<failures<<" failures\n";
 	return failures?1:0;

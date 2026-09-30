@@ -41,6 +41,11 @@ int wmain(int argc, wchar_t** argv) {
 	Check("PNG transparency and colors survive encoding", png.ok && Decode(png.value, true));
 	const auto ico = icon(L"Transparent.ico");
 	Check("ICO decodes to transparent PNG", ico.ok && Decode(ico.value, true));
+	const auto multi = icon(L"Multi.ico");
+	Check("multi-resolution ICO chooses largest usable frame",multi.ok && multi.value.width==64 && multi.value.height==64 && Decode(multi.value,false));
+	LauncherDraft folder; folder.iconSource=root+L"\\Folder.png";
+	const auto folderIcon=PrepareLauncherIcon(folder);
+	Check("folder named PNG uses its shell icon",folderIcon.ok && Decode(folderIcon.value,false));
 	const auto exe = icon(L"Versioned application.exe");
 	Check("EXE embedded icon becomes PNG without execution", exe.ok && Decode(exe.value, false));
 	const auto lnk = icon(L"Original shortcut.lnk");

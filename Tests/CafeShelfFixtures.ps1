@@ -56,6 +56,26 @@ try {
         $writer.Write($pngBytes)
         [IO.File]::WriteAllBytes((Join-Path $Directory 'Transparent.ico'), $icoStream.ToArray())
     } finally { $writer.Dispose(); $icoStream.Dispose() }
+    New-Item -ItemType Directory -Path (Join-Path $Directory 'Folder.png') | Out-Null
+    $frames = @()
+    foreach ($size in @(16, 64)) {
+        $frame = [Drawing.Bitmap]::new($size,$size,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $stream = [IO.MemoryStream]::new()
+        try { $frame.Save($stream,[Drawing.Imaging.ImageFormat]::Png); $frames += ,$stream.ToArray() }
+        finally { $frame.Dispose(); $stream.Dispose() }
+    }
+    $stream = [IO.MemoryStream]::new(); $writer = [IO.BinaryWriter]::new($stream)
+    try {
+        $writer.Write([uint16]0); $writer.Write([uint16]1); $writer.Write([uint16]2)
+        $offset = 38; $sizes = @(16,64)
+        foreach ($index in 0..1) {
+            $writer.Write([byte]$sizes[$index]); $writer.Write([byte]$sizes[$index]); $writer.Write([byte]0); $writer.Write([byte]0)
+            $writer.Write([uint16]1); $writer.Write([uint16]32); $writer.Write([uint32]$frames[$index].Length); $writer.Write([uint32]$offset)
+            $offset += $frames[$index].Length
+        }
+        foreach ($bytes in $frames) { $writer.Write([byte[]]$bytes) }
+        [IO.File]::WriteAllBytes((Join-Path $Directory 'Multi.ico'),$stream.ToArray())
+    } finally { $writer.Dispose(); $stream.Dispose() }
     [IO.File]::WriteAllText((Join-Path $Directory 'Corrupt.png'), 'not an image')
     $oversized = [IO.File]::Create((Join-Path $Directory 'Oversized.png'))
     try { $oversized.SetLength(32MB + 1) } finally { $oversized.Dispose() }

@@ -13,3 +13,5 @@ try {
     $bitmap.SetPixel(1,0,[Drawing.Color]::FromArgb(128,10,20,30))
     $bitmap.Save("$Directory/Transparent.png",[Drawing.Imaging.ImageFormat]::Png)
 } finally { $bitmap.Dispose() }
+
+New-Item -ItemType Junction -Path "$Directory/RedirectedRoot" -Target "$Directory/Shelf1" | Out-Null

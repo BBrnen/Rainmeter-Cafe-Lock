@@ -199,6 +199,8 @@ int wmain(int argc, wchar_t** argv) {
 					L"uiCalls[3].op==='importDrop' && uiCalls[3].payload.purpose==='launcher' && uiCalls[3].files[0]===dropData.files[0]"));
 				Script(view.Get(),L"completeImport({name:'Drop fixture',action:'C:\\\\Fixture\\\\Drop.lnk',warning:'Keep default'});");
 				Wait([&](){return PageTrue(view.Get(),L"!document.getElementById('itemSaveBtn').disabled");});
+				Check("failed replacement icon restores persisted default rather than unsaved import",PageTrue(view.Get(),
+					L"document.getElementById('itemIcon').value==='file.png' && document.getElementById('iconPreview').hidden"));
 				Script(view.Get(),L"document.getElementById('status').textContent='Saved.'; document.getElementById('itemSaveBtn').click();");
 				Check("pending Save neither closes draft nor announces success",PageTrue(view.Get(),
 					L"document.getElementById('itemModal').open && document.getElementById('itemSaveBtn').disabled && !document.getElementById('status').textContent.includes('Saved')"));
