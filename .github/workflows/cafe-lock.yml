@@ -143,6 +143,7 @@ jobs:
         run: |
           choco install nsis --version=3.11 -y --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          ./Tests/CafeRuntimePolicy.ps1
           ./Build/CafeInstaller/Package.ps1
 
       - name: Test install, standard-user permissions, upgrade and uninstall

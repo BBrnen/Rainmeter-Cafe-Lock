@@ -43,7 +43,7 @@ if ($Standard) {
 if (Test-Path $installed) { throw 'Runner already has Cafe Lock installed; refusing to alter it' }
 if (Test-Path $profile) { throw 'Runner already has a Cafe Lock profile' }
 Run-Setup
-foreach ($path in @('Rainmeter.exe','Rainmeter.dll','SkinInstaller.exe','RestartRainmeter.exe','Uninstall.exe','LICENSE','Defaults/Skins/illustro','Languages/1033.dll')) {
+foreach ($path in @('Rainmeter.exe','Rainmeter.dll','SkinInstaller.exe','RestartRainmeter.exe','Uninstall.exe','LICENSE','Defaults/Skins/illustro','Languages/1033.dll','Notices/WebView2-LICENSE.txt','Notices/WebView2-NOTICE.txt','Notices/ShelfSuite-LICENSE.txt','Notices/WebView2-runtime-manifest.json')) {
  if (-not (Test-Path "$installed/$path")) { throw "Missing installed file: $path" }
 }
 if (Test-Path "$installed/RainmeterCafeMaintenance.exe") { throw 'Obsolete UAC helper packaged' }
