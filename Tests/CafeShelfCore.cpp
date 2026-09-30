@@ -54,7 +54,7 @@ int main()
 	Check("typed icon drop", DecodeRequest(Message("importDrop", {{"purpose", "icon"}})).ok);
 	Check("no unlock operation", !DecodeRequest(Message("unlock")).ok);
 	Check("no generic file write", !DecodeRequest(Message("writeFile")).ok);
-	Check("save denied until typed edits implemented", !DecodeRequest(Message("saveEdits")).ok);
+	Check("empty save request rejected", !DecodeRequest(Message("saveEdits")).ok);
 	Check("load accepts no page path", !DecodeRequest(Message("load", {{"path", "C:/config.lua"}})).ok);
 	Check("drop accepts no page path", !DecodeRequest(Message("importDrop", {{"purpose", "icon"}, {"path", "C:/x"}})).ok);
 	Check("unknown drop purpose", !DecodeRequest(Message("importDrop", {{"purpose", "execute"}})).ok);
@@ -74,6 +74,15 @@ int main()
 	Check("oversized string", !DecodeRequest(Message("importDrop", {{"purpose", std::string(MaxStringUnits + 1, 'a')}})).ok);
 	Check("excessive nesting", !DecodeRequest(std::string(MaxJsonDepth + 1, '[') + "0" + std::string(MaxJsonDepth + 1, ']')).ok);
 
+	Json edits={{"shelf","Shelf1"},{"version","native-version"},{"iconId",0},
+		{"edit",{{"kind","addItem"},{"tab",0},{"item",0},{"label","App"},{"action","app.exe"},{"icon","file.png"}}}};
+	Check("typed launcher save accepted", DecodeRequest(Message("saveEdits",edits)).ok);
+	edits["path"]="C:/outside";
+	Check("save cannot choose a destination path", !DecodeRequest(Message("saveEdits",edits)).ok);
+	edits.erase("path"); edits["edit"]["lua"]="os.execute('bad')";
+	Check("save cannot contain executable Lua", !DecodeRequest(Message("saveEdits",edits)).ok);
+	edits["edit"].erase("lua"); edits["edit"]["kind"]="unlock";
+	Check("edit kinds cannot authorize unlock", !DecodeRequest(Message("saveEdits",edits)).ok);
 	auto valid = DecodeRequest(R"({"id":42,"op":"browseFolder","payload":{}})");
 	Check("request preserves typed fields", valid.ok && valid.value.id == 42 && valid.value.operation == Operation::BrowseFolder);
 	Response response;

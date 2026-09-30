@@ -148,6 +148,14 @@ int main() {
 			auto view = capture->view;
 			Check("bundled script and exact origin are active", PageTrue(view.Get(),
 				L"location.href === 'https://cafe-shelf.invalid/index.html' && typeof request === 'function'"));
+			Check("complete Add/Edit dialog is bundled", PageTrue(view.Get(),
+				L"['itemModal','itemLabel','itemAction','itemIcon','itemSaveBtn','itemCancelBtn'].every(id=>document.getElementById(id))"));
+			Check("launcher and custom icon drop surfaces are present", PageTrue(view.Get(),
+				L"document.getElementById('launcherDrop')!==null && document.getElementById('iconDrop')!==null"));
+			Check("native browse and folder controls are present", PageTrue(view.Get(),
+				L"['browseLauncher','browseFolder','browseIcon'].every(id=>document.getElementById(id))"));
+			Check("shelves tabs preview and status controls are present", PageTrue(view.Get(),
+				L"['shelvesNav','tabsNav','itemsList','iconPreview','status'].every(id=>document.getElementById(id))"));
 			ComPtr<ICoreWebView2Settings> settings;
 			ComPtr<ICoreWebView2Settings3> settings3;
 			ComPtr<ICoreWebView2Settings4> settings4;
