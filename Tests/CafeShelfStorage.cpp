@@ -85,7 +85,8 @@ int wmain(int argc,wchar_t** argv) {
 		GetFileAttributesW((icons+L"\\failed-save.png").c_str())==INVALID_FILE_ATTRIBUTES);
 	SetFileAttributesW(hard.c_str(),FILE_ATTRIBUTE_NORMAL);
 	Check("redirected editing root rejected",!Storage(root+L"\\RedirectedRoot").Discover().ok);
-	// Inject an outside edit at the final authorization boundary: commit must not overwrite it.
+	// At the final authorization boundary, ordinary writes/moves must be blocked;
+	// a permitted outside ReplaceFile save must have recoverable bytes and a warning.
 	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
 	int gates=0; const auto validated=Read(hard); const auto raced=validated+"\n-- final boundary edit\n";
 	bool writeBlocked=false;
@@ -99,14 +100,29 @@ int wmain(int argc,wchar_t** argv) {
 	});
 	Check("final read lease blocks ordinary concurrent writes",race.ok && writeBlocked && Read(race.value.backup)==validated);
 	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
-	const auto outsideVersion=Read(hard)+"\n-- outside replacement\n";
+	const auto beforeMove=Read(hard); const auto outsideVersion=beforeMove+"\n-- outside replacement\n";
 	const auto external=root+L"\\external.lua";Write(external,outsideVersion);gates=0;bool moved=false;DWORD moveError=0;
 	auto renameRace=storage.Commit(prepared.value,[&](){
 		if(++gates==2){moved=MoveFileExW(external.c_str(),hard.c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;moveError=moved?0:GetLastError();}
 		return true;
 	});
-	std::wcout<<L"Replacement race: moved="<<moved<<L" error="<<moveError<<L" save="<<renameRace.ok<<L" message="<<renameRace.message<<L" warning="<<renameRace.value.warning<<L" backupMatches="<<(Read(renameRace.value.backup)==outsideVersion)<<L"\n";
-	Check("concurrent replacement is preserved and reported",renameRace.ok && moved && Read(renameRace.value.backup)==outsideVersion && !renameRace.value.warning.empty());
+	Check("open config blocks competing MoveFileEx without losing either file",renameRace.ok && !moved &&
+		(moveError==ERROR_ACCESS_DENIED || moveError==ERROR_SHARING_VIOLATION) &&
+		Read(external)==outsideVersion && Read(renameRace.value.backup)==beforeMove);
+	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto outsideSave=Read(hard)+"\n-- outside ReplaceFile save\n";
+	Write(external,outsideSave);gates=0;bool replacedDuringSave=false;DWORD replacementError=0;
+	const auto externalBackup=root+L"\\external-backup.lua";
+	auto replaceRace=storage.Commit(prepared.value,[&](){
+		if(++gates==2) {
+			replacedDuringSave=ReplaceFileW(hard.c_str(),external.c_str(),externalBackup.c_str(),0,nullptr,nullptr)!=FALSE;
+			replacementError=replacedDuringSave?0:GetLastError();
+		}
+		return true;
+	});
+	std::cout<<"Outside ReplaceFile: replaced="<<replacedDuringSave<<" error="<<replacementError<<" save="<<replaceRace.ok<<'\n';
+	Check("concurrent replacement is preserved and reported",replaceRace.ok && replacedDuringSave &&
+		Read(replaceRace.value.backup)==outsideSave && !replaceRace.value.warning.empty());
 	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
 	const auto busyOriginal=Read(hard);
 	HANDLE busyWriter=CreateFileW(hard.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
