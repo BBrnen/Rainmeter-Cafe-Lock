@@ -14,9 +14,6 @@ try {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
     }
-    $sdkHeaders = Join-Path $env:WindowsSdkDir ('Include/' + $env:WindowsSDKVersion.TrimEnd('\') + '/um')
-    Get-ChildItem -LiteralPath $sdkHeaders -Filter '*.h' |
-        Select-String -Pattern 'SHCreateItemFromParsingName' -Context 8, 2 | ForEach-Object { $_.ToString() }
     $failed = @()
     foreach ($test in $tests) {
         $source = @{

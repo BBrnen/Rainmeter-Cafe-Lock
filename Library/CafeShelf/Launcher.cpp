@@ -1,3 +1,9 @@
+// The Windows 7 shell helpers require IE7 declarations in the SDK.
+// Keep this local; upstream Rainmeter's build target is unchanged.
+#if defined(_WIN32_IE) && _WIN32_IE < 0x0700
+#undef _WIN32_IE
+#define _WIN32_IE 0x0700
+#endif
 #include "Launcher.h"
 #include <windows.h>
 #include <shlobj.h>

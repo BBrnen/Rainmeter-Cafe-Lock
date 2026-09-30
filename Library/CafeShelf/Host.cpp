@@ -250,8 +250,14 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 	{
 		const bool iconOnly=work.request.operation==Operation::BrowseIcon ||
 			(work.request.operation==Operation::ImportDrop && work.request.payload["purpose"]=="icon");
-		StartJob(work,[selected,iconOnly](Job& task)
+		const bool dropped=work.request.operation==Operation::ImportDrop;
+		StartJob(work,[selected,iconOnly,dropped](Job& task) mutable
 		{
+			const auto attributes=GetFileAttributesW(selected.path.c_str());
+			if(attributes==INVALID_FILE_ATTRIBUTES){task.reply.code=Error::NotFound;task.reply.data={{"message","The selected item is unavailable."}};return;}
+			const bool directory=(attributes & FILE_ATTRIBUTE_DIRECTORY)!=0;
+			if(!dropped && selected.directory!=directory){task.reply.code=Error::Conflict;task.reply.data={{"message","The selected item changed. Choose it again."}};return;}
+			selected.directory=directory;
 			task.selected=selected;task.iconOnly=iconOnly;
 			if(!iconOnly)
 			{
@@ -668,9 +674,9 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 		case Operation::ImportDrop:
 		{
 			auto selected = work.request.operation == Operation::ImportDrop ?
-				selection.AcceptDrop(work.object.Get(), work.ticket) :
+				selection.CaptureDrop(work.object.Get(), work.ticket) :
 				selection.Pick(window, work.request.operation == Operation::BrowseFolder ? SelectionKind::Folder :
-					work.request.operation == Operation::BrowseIcon ? SelectionKind::Icon : SelectionKind::LauncherFile, work.ticket);
+					work.request.operation == Operation::BrowseIcon ? SelectionKind::Icon : SelectionKind::LauncherFile, work.ticket, true);
 			if (!control.Allows(work.ticket)) { busy = false; return; }
 			if (!selected.ok)
 			{

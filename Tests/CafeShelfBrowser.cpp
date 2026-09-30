@@ -1,5 +1,6 @@
 // Test-only COM observation. No script execution or factory override is exported by Rainmeter.
 #include "../Library/CafeShelf/Host.h"
+#include <objbase.h>
 #include <WebView2.h>
 #include <wrl.h>
 #include <iostream>

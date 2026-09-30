@@ -81,7 +81,7 @@ Result<SelectedFile> Selection::FromNativePath(const std::wstring& path, Ticket 
 	return result;
 }
 
-Result<SelectedFile> Selection::AcceptDrop(IUnknown* fileObject, Ticket ticket)
+Result<SelectedFile> Selection::CaptureDrop(IUnknown* fileObject, Ticket ticket)
 {
 	if (m_Revoked || !m_Allows || !m_Allows(ticket)) return Failure(Error::Stale, L"This editor session has ended.");
 	if (!fileObject) return Failure(Error::InvalidInput, L"Drop one file or folder from File Explorer.");
@@ -92,17 +92,22 @@ Result<SelectedFile> Selection::AcceptDrop(IUnknown* fileObject, Ticket ticket)
 		return Failure(Error::InvalidInput, L"Drop one file or folder from File Explorer.");
 	const size_t size = wcsnlen_s(path.value, MaxStringUnits + 1);
 	if (size > MaxStringUnits) return Failure(Error::InvalidInput, L"The selected path is too long.");
-	return FromNativePath(std::wstring(path.value, size), ticket);
+	if (m_Revoked || !m_Allows(ticket)) return Failure(Error::Stale, L"This editor session has ended.");
+	std::wstring captured(path.value, size);
+	if (captured.empty() || !AbsoluteFilePath(captured)) return Failure(Error::InvalidInput, L"Choose a filesystem file or folder.");
+	Result<SelectedFile> result; result.ok = true; result.code = Error::None;
+	result.value = {std::move(captured), false};
+	return result;
 }
 
-Result<SelectedFile> Selection::CaptureDrop(IUnknown* fileObject, Ticket ticket)
+Result<SelectedFile> Selection::AcceptDrop(IUnknown* fileObject, Ticket ticket)
 {
-	return AcceptDrop(fileObject,ticket);
+	auto captured = CaptureDrop(fileObject, ticket);
+	return captured.ok ? FromNativePath(captured.value.path, ticket) : captured;
 }
 
 Result<SelectedFile> Selection::Pick(HWND owner, SelectionKind kind, Ticket ticket, bool captureOnly)
 {
-	(void)captureOnly;
 	if (m_Revoked || !m_Allows || !m_Allows(ticket)) return Failure(Error::Stale, L"This editor session has ended.");
 	if (m_Dialog) return Failure(Error::Conflict, L"A file selection dialog is already open.");
 	ComPtr<IFileOpenDialog> dialog;
@@ -121,6 +126,15 @@ Result<SelectedFile> Selection::Pick(HWND owner, SelectionKind kind, Ticket tick
 		return Failure(Error::InvalidInput, L"Choose a filesystem file or folder.");
 	const size_t size = wcsnlen_s(path.value, MaxStringUnits + 1);
 	if (size > MaxStringUnits) return Failure(Error::InvalidInput, L"The selected path is too long.");
+	if (captureOnly)
+	{
+		if (m_Revoked || !m_Allows(ticket)) return Failure(Error::Stale, L"This editor session has ended.");
+		std::wstring captured(path.value, size);
+		if (captured.empty() || !AbsoluteFilePath(captured)) return Failure(Error::InvalidInput, L"Choose a filesystem file or folder.");
+		Result<SelectedFile> result; result.ok = true; result.code = Error::None;
+		result.value = {std::move(captured), kind == SelectionKind::Folder};
+		return result;
+	}
 	auto result = FromNativePath(std::wstring(path.value, size), ticket);
 	if (result.ok && ((kind == SelectionKind::Folder) != result.value.directory))
 		return Failure(Error::InvalidInput, L"Choose the requested file or folder type.");

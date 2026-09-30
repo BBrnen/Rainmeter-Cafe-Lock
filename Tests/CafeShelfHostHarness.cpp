@@ -1,4 +1,5 @@
 #include "../Library/CafeShelf/Host.h"
+#include <objbase.h>
 #include <WebView2.h>
 #include <wrl.h>
 #include <iostream>
