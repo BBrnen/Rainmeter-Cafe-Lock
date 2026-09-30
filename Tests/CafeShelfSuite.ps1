@@ -21,7 +21,7 @@ foreach ($name in @('AppOne','AppTwo')) {
   New-Item -ItemType Directory "$root/$name" | Out-Null
   Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$root/$name/Probe.exe"
 }
-$shortcutPath = Join-Path $root 'Original Café shortcut.lnk'
+$shortcutPath = Join-Path $root 'Original Caf� shortcut.lnk'
 $workingDirectory = Join-Path $root 'Shortcut working directory'
 New-Item -ItemType Directory -Path $workingDirectory | Out-Null
 $shell = New-Object -ComObject WScript.Shell
@@ -60,6 +60,8 @@ ShelfConfig = {
   }
 }
 "@ | Set-Content "$skins/Shelf Suite/Shelf1/config.lua"
+& "$PSScriptRoot/../CafeShelfNameProbe.exe" "$skins/Shelf Suite/Shelf1/config.lua"
+if($LASTEXITCODE -ne 0){throw 'Native name encoding/rejection probe failed'}
 $ini = Join-Path $root 'Rainmeter.ini'
 @"
 [Rainmeter]
@@ -141,7 +143,8 @@ try {
   $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf1\Shelf.ini")
   $tray = [LockNative]::FindWindow('RainmeterTrayClass',$null)
   $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
-  Wait-For { (Read-ShelfState) -eq '1|65|First app' } 'initial stock meters'
+  Wait-For { (Read-ShelfState) -eq "1|65|O'Brien <Cafe>" } 'initial literal name through real stock meters'
+  Write-Output 'PASS: native-saved quotes/HTML-like literal name survives loaded ShelfSuite/Rainmeter layers.'
   $before = Position $window
   # Preserve each stock action, then observe its result in the same UI callback.
   # On a hosted desktop WM_MOUSELEAVE can arrive before an external snapshot.

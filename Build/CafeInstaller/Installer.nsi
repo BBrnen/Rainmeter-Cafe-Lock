@@ -6,6 +6,7 @@ Unicode true
 !include "FileFunc.nsh"
 !include "RuntimePolicy.nsh"
 Var RuntimePresent
+Var RuntimeUserPresent
 !ifndef PAYLOAD
  !error "PAYLOAD and OUTFILE must be supplied by Package.ps1"
 !endif
@@ -53,6 +54,7 @@ FunctionEnd
 Function DetectRuntime
  ; Microsoft documents HKLM's 32-bit view and HKCU for Evergreen detection.
  StrCpy $RuntimePresent 0
+ StrCpy $RuntimeUserPresent 0
  SetRegView 32
  ReadRegStr $0 HKLM "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
  ${If} $0 != ""
@@ -62,7 +64,7 @@ Function DetectRuntime
   ReadRegStr $0 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
   ${If} $0 != ""
   ${AndIf} $0 != "0.0.0.0"
-   StrCpy $RuntimePresent 1
+   StrCpy $RuntimeUserPresent 1
   ${EndIf}
  ${EndIf}
  SetRegView 64
@@ -109,6 +111,7 @@ Section "Optional WebView2 prerequisite"
   StrCpy $4 1
  ${EndIf}
  Push $RuntimePresent
+ Push $RuntimeUserPresent
  Push $3
  Push $4
  Call RuntimeDecision

@@ -1,14 +1,17 @@
 ; Shared, deterministic prerequisite policy. No registry writes or execution here.
-; Stack inputs: present, silent, explicitly requested. Output: 0 skip, 1 install, 2 ask.
+; Stack inputs: machine present, admin-user present, silent, requested.
+; Output: 0 skip, 1 install, 2 ask. This package installs for all users.
 Function RuntimeDecision
+ Pop $3
  Pop $2
  Pop $1
  Pop $0
  ${If} $0 == 1
+ ${OrIf} $1 == 1
   Push 0
- ${ElseIf} $2 == 1
+ ${ElseIf} $3 == 1
   Push 1
- ${ElseIf} $1 == 1
+ ${ElseIf} $2 == 1
   Push 0
  ${Else}
   Push 2

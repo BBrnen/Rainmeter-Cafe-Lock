@@ -60,6 +60,15 @@ int main() {
 	Check("edited action cannot inject Rainmeter bangs", !ApplyEdit(parsed.value,change,5,18).ok);
 	change.action=L"app.exe"; change.icon=L"..\\outside.png";
 	Check("new icon reference cannot escape Icons", !ApplyEdit(parsed.value,change,5,18).ok);
+	change.icon=L"file.png";
+	for(const auto name:{L"#CURRENTCONFIG#",L"%USERNAME%",L"[MeasureEngine]"}) {
+		change.label=name;
+		Check("new item name cannot undergo Rainmeter expansion",!ApplyEdit(parsed.value,change,5,18).ok);
+	}
+	change.kind=EditKind::RenameTab;change.label=L"#CURRENTCONFIG#";
+	Check("renamed tab cannot undergo Rainmeter expansion",!ApplyEdit(parsed.value,change,5,18).ok);
+	change.kind=EditKind::AddTab;change.label=L"%USERNAME%";
+	Check("new tab cannot undergo environment expansion",!ApplyEdit(parsed.value,change,5,18).ok);
 	std::string deep="ShelfConfig={tabs={},x="; for(int i=0;i<65;++i)deep+="{";
 	deep+="true"; for(int i=0;i<65;++i)deep+="}"; deep+="}";
 	Check("nested input bounded", !ParseConfig(deep).ok);

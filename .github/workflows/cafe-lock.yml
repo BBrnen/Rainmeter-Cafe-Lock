@@ -11,6 +11,21 @@ permissions:
   contents: read
 
 jobs:
+  cafe-runtime-policy:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out prerequisite policy tests
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Test compiled optional prerequisite decisions
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          ./Tests/CafeRuntimePolicy.ps1
+
   cafe-shelf-core:
     runs-on: windows-2022
     timeout-minutes: 10
@@ -125,8 +140,13 @@ jobs:
           persist-credentials: false
 
       - name: Test real ShelfSuite with a standard-user token
-        shell: pwsh
-        run: ./Tests/CafeShelfSuiteRunner.ps1 -ShelfSuiteDirectory work-package/ShelfSuite
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX /D_HAS_EXCEPTIONS=0 /utf-8 Tests\CafeShelfNameProbe.cpp Library\CafeShelf\Config.cpp /Fe:CafeShelfNameProbe.exe
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfSuiteRunner.ps1 -ShelfSuiteDirectory work-package/ShelfSuite
 
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -143,7 +163,6 @@ jobs:
         run: |
           choco install nsis --version=3.11 -y --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
-          ./Tests/CafeRuntimePolicy.ps1
           ./Build/CafeInstaller/Package.ps1
 
       - name: Test install, standard-user permissions, upgrade and uninstall

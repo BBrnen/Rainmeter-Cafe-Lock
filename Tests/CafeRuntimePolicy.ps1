@@ -10,5 +10,5 @@ try {
  if($LASTEXITCODE -ne 0){throw 'Runtime policy test compilation failed'}
 } finally {Pop-Location}
 $process=Start-Process -FilePath $test -WindowStyle Hidden -Wait -PassThru
-if($process.ExitCode -ne 0){throw "$($process.ExitCode) of 10 Runtime decision/result checks failed"}
-Write-Host 'PASS 10 Runtime decision/result checks (present, missing, silent opt-in, prompt, success, failure). No Runtime installer executed.'
+if($process.ExitCode -ne 0){throw "$($process.ExitCode) of 12 Runtime decision/result checks failed"}
+Write-Host 'PASS 12 Runtime decision/result checks (machine/per-user presence, silent opt-in, prompt, success, failure). No Runtime installer executed.'

@@ -166,6 +166,9 @@ int wmain(int argc,wchar_t** argv) {
 		Check("native replacement does not alter a symbolic target",Read(outside)=="outside owner");
 	}
 	Edit addShelf{EditKind::AddShelf,0,0,L"New tab",L"Forest",L""};
+	addShelf.label=L"#CURRENTCONFIG#";
+	Check("new shelf tab name cannot undergo Rainmeter expansion",!storage.Prepare({},addShelf,nullptr,L"").ok);
+	addShelf.label=L"New tab";
 	auto newShelf=storage.Prepare({},addShelf,nullptr,L"");
 	Check("new shelf preparation leaves existing shelves unchanged",newShelf.ok && !storage.Load(L"Shelf2").ok);
 	Check("locked creation cannot publish a shelf",!storage.Commit(newShelf.value,[](){return false;}).ok && !storage.Load(L"Shelf2").ok);

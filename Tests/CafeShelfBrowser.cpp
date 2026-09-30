@@ -196,6 +196,19 @@ int wmain(int argc, wchar_t** argv) {
 				Script(view.Get(),L"document.getElementById('confirmRemove').click();");
 				Check("confirmed removal returns to the remaining shelf",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('confirmModal').open && document.getElementById('shelfTitle').textContent==='Shelf1' && document.querySelectorAll('#shelvesNav button').length===1 && !document.getElementById('addItemBtn').disabled");}));
+				// Accelerate only the old 60s transport timeout, holding the actual save
+				// message. It must remain pending until native completion, without retry/cancel.
+				Script(view.Get(),L"window.savedTimer=window.setTimeout; window.expiryCallbacks=[]; window.heldSaves=[]; window.savedPost=chrome.webview.postMessage.bind(chrome.webview); window.setTimeout=(fn,delay,...args)=>delay===60000?(expiryCallbacks.push(fn),0):savedTimer(fn,delay,...args); chrome.webview.postMessage=message=>{if(JSON.parse(message).op==='saveEdits')heldSaves.push(message);else savedPost(message);}; document.getElementById('addShelfBtn').click(); document.getElementById('tabName').value='Delayed shelf'; document.getElementById('tabSaveBtn').click(); expiryCallbacks.forEach(fn=>fn());");
+				Check("slow mutation remains tracked beyond read timeout",Wait([&](){return PageTrue(view.Get(),
+					L"heldSaves.length===1 && document.getElementById('tabModal').open && document.getElementById('tabSaveBtn').disabled && document.getElementById('tabCancelBtn').disabled");}));
+				Script(view.Get(),L"document.getElementById('tabForm').dispatchEvent(new Event('submit',{cancelable:true})); document.getElementById('tabCancelBtn').click();");
+				Check("slow mutation blocks retry and Cancel until definitive result",PageTrue(view.Get(),
+					L"heldSaves.length===1 && document.getElementById('tabModal').open"));
+				Script(view.Get(),L"window.setTimeout=savedTimer; chrome.webview.postMessage=savedPost; savedPost(heldSaves[0]);");
+				Check("delayed real native result completes the original mutation",Wait([&](){return PageTrue(view.Get(),
+					L"!document.getElementById('tabModal').open && document.getElementById('shelfTitle').textContent==='Shelf2' && document.getElementById('tabsNav').textContent.includes('Delayed shelf') && !document.getElementById('addShelfBtn').disabled");},5000));
+				Script(view.Get(),L"document.getElementById('tabModal').close(); shelfId='Shelf1'; reload();");
+				Wait([&](){return PageTrue(view.Get(),L"document.getElementById('shelfTitle').textContent==='Shelf1'");});
 				Script(view.Get(),L"window.nativeRequest=request; window.uiCalls=[]; request=(op,payload={},files=[])=>new Promise((resolve,reject)=>{uiCalls.push({op,payload,files});window.completeImport=resolve;window.failImport=reject;}); document.getElementById('addItemBtn').click(); document.getElementById('browseLauncher').click();");
 				Check("Browse launcher requests native selection and disables Save",PageTrue(view.Get(),
 					L"uiCalls[0].op==='browseLauncher' && document.getElementById('itemSaveBtn').disabled"));
