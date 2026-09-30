@@ -18,7 +18,8 @@ public:
 	~Selection();
 	Selection(const Selection&) = delete;
 	Selection& operator=(const Selection&) = delete;
-	Result<SelectedFile> Pick(HWND owner, SelectionKind kind, Ticket ticket);
+	Result<SelectedFile> Pick(HWND owner, SelectionKind kind, Ticket ticket, bool captureOnly = false);
+	Result<SelectedFile> CaptureDrop(IUnknown* fileObject, Ticket ticket);
 	// Only Host's origin-checked native WebView additional-object event calls this.
 	Result<SelectedFile> AcceptDrop(IUnknown* fileObject, Ticket ticket);
 	void Revoke();

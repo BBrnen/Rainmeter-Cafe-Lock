@@ -95,8 +95,14 @@ Result<SelectedFile> Selection::AcceptDrop(IUnknown* fileObject, Ticket ticket)
 	return FromNativePath(std::wstring(path.value, size), ticket);
 }
 
-Result<SelectedFile> Selection::Pick(HWND owner, SelectionKind kind, Ticket ticket)
+Result<SelectedFile> Selection::CaptureDrop(IUnknown* fileObject, Ticket ticket)
 {
+	return AcceptDrop(fileObject,ticket);
+}
+
+Result<SelectedFile> Selection::Pick(HWND owner, SelectionKind kind, Ticket ticket, bool captureOnly)
+{
+	(void)captureOnly;
 	if (m_Revoked || !m_Allows || !m_Allows(ticket)) return Failure(Error::Stale, L"This editor session has ended.");
 	if (m_Dialog) return Failure(Error::Conflict, L"A file selection dialog is already open.");
 	ComPtr<IFileOpenDialog> dialog;

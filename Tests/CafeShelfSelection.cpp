@@ -78,9 +78,11 @@ int wmain(int argc, wchar_t** argv)
 	Check("device path rejected", !selection.AcceptDrop(object.Get(), ticket).ok);
 	object->path = std::wstring(argv[1]) + L".missing";
 	Check("missing selected file rejected", !selection.AcceptDrop(object.Get(), ticket).ok);
+	Check("UI capture returns native path without waiting for filesystem metadata", selection.CaptureDrop(object.Get(), ticket).ok);
 	object->path = argv[1];
 	locked = true;
 	Check("locked drop rejected before path access", !selection.AcceptDrop(object.Get(), ticket).ok);
+	Check("capture-only route cannot bypass lock", !selection.CaptureDrop(object.Get(), ticket).ok);
 	Check("locked picker cannot show", !selection.Pick(nullptr, SelectionKind::LauncherFile, ticket).ok);
 	locked = false;
 	object->onRead = [&locked]() { locked = true; };
