@@ -169,6 +169,7 @@ int wmain(int argc, wchar_t** argv) {
 					L"!document.getElementById('itemModal').open && document.getElementById('status').textContent.includes('Saved') && [...document.querySelectorAll('#itemsList .item-label')].filter(x=>x.textContent==='Added fixture').length===1");}));
 				std::ifstream config(options.shelfRoot+L"\\Shelf1\\config.lua",std::ios::binary);
 				const std::string bytes(std::istreambuf_iterator<char>(config),{});
+				config.close();
 				Check("UI Save writes real config",bytes.find("Added fixture")!=std::string::npos);
 				Script(view.Get(),L"document.querySelector('#itemsList .edit-item').click(); document.getElementById('itemLabel').value='<img src=x onerror=window.attacked=1>'; document.getElementById('itemSaveBtn').click();");
 				Check("Edit preserves literal HTML without script execution",Wait([&](){return PageTrue(view.Get(),
@@ -179,6 +180,31 @@ int wmain(int argc, wchar_t** argv) {
 				Script(view.Get(),L"document.getElementById('itemCancelBtn').click();");
 				Check("Cancel closes draft without adding it",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('itemModal').open && !document.getElementById('itemsList').textContent.includes('Keep draft')");}));
+				// Renderer-only transport shim: proves UI wiring, not Windows picker/drop provenance.
+				Script(view.Get(),L"window.nativeRequest=request; window.uiCalls=[]; request=(op,payload={},files=[])=>new Promise((resolve,reject)=>{uiCalls.push({op,payload,files});window.completeImport=resolve;window.failImport=reject;}); document.getElementById('addItemBtn').click(); document.getElementById('browseLauncher').click();");
+				Check("Browse launcher requests native selection and disables Save",PageTrue(view.Get(),
+					L"uiCalls[0].op==='browseLauncher' && document.getElementById('itemSaveBtn').disabled"));
+				Script(view.Get(),L"completeImport({name:'Shortcut fixture',action:'C:\\\\Fixture\\\\Original.lnk',iconId:1,iconName:'shortcut.png',preview:'data:image/png;base64,iVBORw0KGgo='});");
+				Check("native launcher result fills name action and preview",Wait([&](){return PageTrue(view.Get(),
+					L"document.getElementById('itemLabel').value==='Shortcut fixture' && document.getElementById('itemAction').value==='C:\\\\Fixture\\\\Original.lnk' && !document.getElementById('iconPreview').hidden && !document.getElementById('itemSaveBtn').disabled");}));
+				Script(view.Get(),L"document.getElementById('browseFolder').click(); completeImport({name:'Folder fixture',action:'C:\\\\Fixture\\\\Folder',warning:'No icon'});");
+				Check("Browse folder uses its separate native operation",Wait([&](){return PageTrue(view.Get(),
+					L"uiCalls[1].op==='browseFolder' && document.getElementById('itemLabel').value==='Folder fixture' && !document.getElementById('itemSaveBtn').disabled");}));
+				Script(view.Get(),L"document.getElementById('browseIcon').click(); completeImport({iconId:2,iconName:'custom.png',preview:'data:image/png;base64,iVBORw0KGgo='});");
+				Check("custom icon result keeps launcher action",Wait([&](){return PageTrue(view.Get(),
+					L"uiCalls[2].op==='browseIcon' && document.getElementById('itemIcon').value==='custom.png' && document.getElementById('itemAction').value==='C:\\\\Fixture\\\\Folder' && !document.getElementById('itemSaveBtn').disabled");}));
+				Script(view.Get(),L"window.dropData=new DataTransfer(); dropData.items.add(new File(['fixture'],'fixture.lnk')); document.getElementById('launcherDrop').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dropData}));");
+				Check("drop forwards original File object and typed purpose",PageTrue(view.Get(),
+					L"uiCalls[3].op==='importDrop' && uiCalls[3].payload.purpose==='launcher' && uiCalls[3].files[0]===dropData.files[0]"));
+				Script(view.Get(),L"completeImport({name:'Drop fixture',action:'C:\\\\Fixture\\\\Drop.lnk',warning:'Keep default'});");
+				Wait([&](){return PageTrue(view.Get(),L"!document.getElementById('itemSaveBtn').disabled");});
+				Script(view.Get(),L"document.getElementById('status').textContent='Saved.'; document.getElementById('itemSaveBtn').click();");
+				Check("pending Save neither closes draft nor announces success",PageTrue(view.Get(),
+					L"document.getElementById('itemModal').open && document.getElementById('itemSaveBtn').disabled && !document.getElementById('status').textContent.includes('Saved')"));
+				Script(view.Get(),L"failImport(new Error('Simulated write failure'));");
+				Check("delayed Save error keeps user entries",Wait([&](){return PageTrue(view.Get(),
+					L"document.getElementById('itemModal').open && document.getElementById('itemLabel').value==='Drop fixture' && document.getElementById('itemError').textContent==='Simulated write failure' && !document.getElementById('itemSaveBtn').disabled");}));
+				Script(view.Get(),L"request=nativeRequest; document.getElementById('itemCancelBtn').click();");
 			}
 			ComPtr<ICoreWebView2Settings> settings;
 			ComPtr<ICoreWebView2Settings3> settings3;

@@ -49,7 +49,7 @@ int main() {
 	Check("computed expression rejected", !ParseConfig("ShelfConfig={tabs={},x=1+2}").ok);
 	Check("unterminated string rejected", !ParseConfig("ShelfConfig={tabs={},x='oops}").ok);
 	Check("long literal string and comment supported", ParseConfig("--[=[comment]=]\nShelfConfig={tabs={{name=[=[A]=],items={}}}}").ok);
-	Check("UTF8 BOM and surrounding bytes preserved", ParseConfig(std::string("\xEF\xBB\xBF")+original).ok);
+	Check("BOM config is read-only for the pinned Lua 5.1 loader", !ParseConfig(std::string("\xEF\xBB\xBF")+original).ok);
 	Check("UTF16 config rejected rather than written for non-Unicode Lua dofile", !ParseConfig(std::string("\xFF\xFE")+original).ok);
 	Check("large config rejected", !ParseConfig(std::string(4*1024*1024+1,' ')).ok);
 	std::wstring unicode=L"Caf\u00e9";
