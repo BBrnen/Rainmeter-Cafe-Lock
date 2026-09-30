@@ -129,7 +129,7 @@ function Read-ShelfLayout($target) {
   $snapshot = Join-Path $root (([guid]::NewGuid()).ToString() + '.layout')
   $luaPath = $snapshot.Replace('\','/')
   $lua = "local f=assert(io.open('$luaPath','w')); local function v(n) local m=SKIN:GetMeter(n); return m and (tostring(m:GetX())..','..tostring(m:GetW())) or '' end; f:write(tostring(SKIN:GetW())..'|'..v('MeterSettingsGear')..'|'..v('MeterTab1Bg')..'|'..v('MeterTab1Text')..'|'..v('MeterTab2Bg')..'|'..v('MeterTab2Text')..'|'..v('MeterTab3Bg')..'|'..v('MeterTab3Text')..'|'..v('MeterTab4Bg')..'|'..v('MeterTab5Bg')); f:close()"
-  [LockNative]::Bang($target,"!CommandMeasure MeasureEngine `"$lua`")
+  [LockNative]::Bang($target,"!CommandMeasure MeasureEngine `"$lua`"")
   Wait-For { (Test-Path $snapshot) -and (Get-Item $snapshot).Length -gt 0 } 'ShelfSuite layout snapshot'
   $parts = (Get-Content $snapshot -Raw).Trim().Split('|')
   function Pair($value) { $pair=$value.Split(','); return [pscustomobject]@{ X=[int][double]$pair[0]; W=[int][double]$pair[1] } }
