@@ -1,5 +1,6 @@
 #include "../Library/CafeShelf/Storage.h"
 #include <windows.h>
+#include <sddl.h>
 #include <objbase.h>
 #include <fstream>
 #include <iostream>
@@ -32,7 +33,7 @@ int wmain(int argc,wchar_t** argv) {
 	Check("existing literal config loads with snapshot version", loaded.ok && !loaded.value.version.empty());
 	// Mixed real installations: an abandoned/busy shelf must not hide healthy ones.
 	const auto discoveryIni=Read(shelf+L"\\Shelf.ini"), discoveryConfig=Read(shelf+L"\\config.lua");
-	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf90",L"Shelf91",L"Shelf92",L"Shelf93",L"Shelf94"})
+	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf90",L"Shelf91",L"Shelf92",L"Shelf93",L"Shelf94",L"Shelf95"})
 		CreateDirectoryW((root+L"\\"+id).c_str(),nullptr);
 	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf92",L"Shelf93",L"Shelf94"})
 	{
@@ -41,6 +42,11 @@ int wmain(int argc,wchar_t** argv) {
 	}
 	Write(root+L"\\Shelf91\\Shelf.ini","[Rainmeter]\n; unsupported layout\n");
 	Write(root+L"\\Shelf93\\config.lua","ShelfConfig=os.execute('PRIVATE_SENTINEL')");
+	Write(root+L"\\Shelf95\\Shelf.ini",discoveryIni);
+	PSECURITY_DESCRIPTOR deniedRead=nullptr;
+	const bool aclReady=ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(D;;FR;;;WD)(A;;FA;;;WD)",SDDL_REVISION_1,&deniedRead,nullptr)!=FALSE;
+	Check("unreadable fixture denies actual Windows read access",aclReady && SetFileSecurityW((root+L"\\Shelf95\\Shelf.ini").c_str(),DACL_SECURITY_INFORMATION,deniedRead)!=FALSE && Read(root+L"\\Shelf95\\Shelf.ini").empty());
+	if(deniedRead)LocalFree(deniedRead);
 	HANDLE discoveryBusy=CreateFileW((root+L"\\Shelf92\\Shelf.ini").c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,0,nullptr);
 	Check("busy discovery fixture is genuinely locked",discoveryBusy!=INVALID_HANDLE_VALUE);
 	auto mixed=storage.Discover();
@@ -48,15 +54,27 @@ int wmain(int argc,wchar_t** argv) {
 	Check("missing INI warning identifies shelf and file",mixed.message.find(L"Shelf90\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"Windows error 2")!=std::wstring::npos);
 	Check("malformed INI warning identifies shelf and reason",mixed.message.find(L"Shelf91\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"engine")!=std::wstring::npos);
 	Check("locked INI warning identifies Windows sharing error",mixed.message.find(L"Shelf92\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"Windows error 32")!=std::wstring::npos);
+	Check("unreadable INI warning identifies Windows access denial",mixed.message.find(L"Shelf95\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"Windows error 5")!=std::wstring::npos);
 	Check("healthy three shelves load beside broken neighbors",storage.Load(L"Shelf1").ok && storage.Load(L"Shelf2").ok && storage.Load(L"Shelf3").ok);
 	auto malformed=storage.Load(L"Shelf93"), missing=storage.Load(L"Shelf94");
 	Check("malformed Lua identifies file without exposing contents",!malformed.ok && malformed.message.find(L"Shelf93\\config.lua")!=std::wstring::npos && malformed.message.find(L"PRIVATE_SENTINEL")==std::wstring::npos);
 	Check("missing config identifies fallback file and Windows error",!missing.ok && missing.message.find(L"Shelf94\\config.example.lua")!=std::wstring::npos && missing.message.find(L"Windows error 2")!=std::wstring::npos);
 	Check("discovery does not rewrite healthy config bytes",Read(shelf+L"\\config.lua")==discoveryConfig && Read(root+L"\\Shelf2\\config.lua")==discoveryConfig);
+	HANDLE configBusy=CreateFileW((root+L"\\Shelf2\\config.lua").c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,0,nullptr);
+	const auto busyConfig=storage.Load(L"Shelf2");
+	Check("locked config is local and healthy neighbor still loads",configBusy!=INVALID_HANDLE_VALUE && !busyConfig.ok && busyConfig.message.find(L"Shelf2\\config.lua")!=std::wstring::npos && busyConfig.message.find(L"Windows error 32")!=std::wstring::npos && storage.Load(L"Shelf3").ok);
+	if(configBusy!=INVALID_HANDLE_VALUE)CloseHandle(configBusy);
+	HANDLE rangeBusy=CreateFileW((root+L"\\Shelf2\\config.lua").c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,0,nullptr);
+	OVERLAPPED range={};
+	const bool rangeLocked=rangeBusy!=INVALID_HANDLE_VALUE && LockFileEx(rangeBusy,LOCKFILE_EXCLUSIVE_LOCK|LOCKFILE_FAIL_IMMEDIATELY,0,1,0,&range)!=FALSE;
+	const auto rangeConfig=storage.Load(L"Shelf2");
+	Check("byte-range locked config reports Windows read error",rangeLocked && !rangeConfig.ok && rangeConfig.message.find(L"Shelf2\\config.lua")!=std::wstring::npos && rangeConfig.message.find(L"Windows error 33")!=std::wstring::npos && storage.Load(L"Shelf3").ok);
+	if(rangeLocked)UnlockFileEx(rangeBusy,0,1,0,&range);
+	if(rangeBusy!=INVALID_HANDLE_VALUE)CloseHandle(rangeBusy);
 	if(discoveryBusy!=INVALID_HANDLE_VALUE)CloseHandle(discoveryBusy);
 	Check("reload discovers previously busy shelf",storage.Discover().ok && storage.Discover().value.size()==6);
 	// Remove only the disposable fixtures created above, never production shelves.
-	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf90",L"Shelf91",L"Shelf92",L"Shelf93",L"Shelf94"})
+	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf90",L"Shelf91",L"Shelf92",L"Shelf93",L"Shelf94",L"Shelf95"})
 	{
 		DeleteFileW((root+L"\\"+id+L"\\Shelf.ini").c_str());DeleteFileW((root+L"\\"+id+L"\\config.lua").c_str());
 		RemoveDirectoryW((root+L"\\"+id).c_str());

@@ -162,6 +162,7 @@ int wmain(int argc, wchar_t** argv) {
 			const bool editorReady=Wait([&](){return PageTrue(view.Get(),
 				L"document.querySelector('#itemsList .edit-item')!==null");},5000);
 			Check("installed shelf loads into final interface",editorReady);
+			Check("read-only folder diagnostic shows native root",PageTrue(view.Get(),L"document.getElementById('shelfRoot')?.textContent.includes('Browser-') && !document.getElementById('shelfRoot').querySelector('input')"));
 			if(editorReady) {
 				Script(view.Get(),L"if(document.getElementById('themeSelect')) { document.getElementById('themeSelect').value='Forest'; document.getElementById('themeSaveBtn').click(); }");
 				Check("theme control waits for native save",Wait([&](){return PageTrue(view.Get(),

@@ -44,7 +44,7 @@ try {
             $fixtures = Join-Path $output ('Storage-' + [guid]::NewGuid().ToString('N'))
             & "$repo/Tests/CafeShelfStorageFixtures.ps1" -Directory $fixtures
             $arguments = @($fixtures)
-            $compilerArgs += @("$repo/Library/CafeShelf/Storage.cpp", "$repo/Library/CafeShelf/Config.cpp", "$repo/Library/CafeShelf/Icons.cpp", '/link', 'ole32.lib', 'shell32.lib', 'shlwapi.lib', 'windowscodecs.lib', 'gdi32.lib', 'user32.lib', 'uuid.lib', 'bcrypt.lib')
+            $compilerArgs += @("$repo/Library/CafeShelf/Storage.cpp", "$repo/Library/CafeShelf/Config.cpp", "$repo/Library/CafeShelf/Icons.cpp", '/link', 'advapi32.lib', 'ole32.lib', 'shell32.lib', 'shlwapi.lib', 'windowscodecs.lib', 'gdi32.lib', 'user32.lib', 'uuid.lib', 'bcrypt.lib')
         }
         if ($test -eq 'Launcher' -or $test -eq 'Icons') {
             $fixtures = Join-Path $output ('Launcher-' + [guid]::NewGuid().ToString('N'))
