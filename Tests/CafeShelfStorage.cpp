@@ -100,11 +100,12 @@ int wmain(int argc,wchar_t** argv) {
 	Check("final read lease blocks ordinary concurrent writes",race.ok && writeBlocked && Read(race.value.backup)==validated);
 	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
 	const auto outsideVersion=Read(hard)+"\n-- outside replacement\n";
-	const auto external=root+L"\\external.lua";Write(external,outsideVersion);gates=0;bool moved=false;
+	const auto external=root+L"\\external.lua";Write(external,outsideVersion);gates=0;bool moved=false;DWORD moveError=0;
 	auto renameRace=storage.Commit(prepared.value,[&](){
-		if(++gates==2)moved=MoveFileExW(external.c_str(),hard.c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;
+		if(++gates==2){moved=MoveFileExW(external.c_str(),hard.c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;moveError=moved?0:GetLastError();}
 		return true;
 	});
+	std::wcout<<L"Replacement race: moved="<<moved<<L" error="<<moveError<<L" save="<<renameRace.ok<<L" message="<<renameRace.message<<L" warning="<<renameRace.value.warning<<L" backupMatches="<<(Read(renameRace.value.backup)==outsideVersion)<<L"\n";
 	Check("concurrent replacement is preserved and reported",renameRace.ok && moved && Read(renameRace.value.backup)==outsideVersion && !renameRace.value.warning.empty());
 	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
 	const auto busyOriginal=Read(hard);
