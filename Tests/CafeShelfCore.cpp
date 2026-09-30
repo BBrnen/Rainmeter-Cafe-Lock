@@ -79,6 +79,10 @@ int main()
 	Check("typed launcher save accepted", DecodeRequest(Message("saveEdits",edits)).ok);
 	edits["edit"]["kind"]="setTheme"; edits["edit"]["label"]="Forest";
 	Check("typed theme save accepted", DecodeRequest(Message("saveEdits",edits)).ok);
+	edits["edit"]["kind"]="addShelf";
+	Check("typed shelf creation accepted", DecodeRequest(Message("saveEdits",edits)).ok);
+	edits["edit"]["kind"]="removeShelf";
+	Check("typed shelf removal accepted", DecodeRequest(Message("saveEdits",edits)).ok);
 	edits["edit"]["kind"]="addItem";
 	edits["path"]="C:/outside";
 	Check("save cannot choose a destination path", !DecodeRequest(Message("saveEdits",edits)).ok);
