@@ -34,6 +34,9 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      - name: Audit the ShelfSuite F1 delivery contract
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests/CafeShelfSuiteDelivery.ps1
       - name: Test editor protocol and revocation
         shell: cmd
         run: |

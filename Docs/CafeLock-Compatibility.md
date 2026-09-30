@@ -17,6 +17,9 @@ build, not a claim that every third-party skin or Windows environment is tested.
   the configurator. File hashes verify that the patched fixture files stay
   unchanged while the test runs.
 - ShelfSuite is not bundled in the installer or maintained as a separate fork.
+- F1 records a future same-skin compatibility ZIP in
+  `Docs/CafeLock-ShelfSuite-F1-Delivery.md`; this feature does not package,
+  deploy, or alter a real installation.
 
 `Tests/CafeShelfSuite.ps1` checks launcher clicks, tab content, hover and leave
 effects, Lua-driven meter changes, and application launches with a standard-user

@@ -49,8 +49,9 @@ and reads its actual measured width from Rainmeter. It chooses the larger of
 after the preceding chosen width plus the existing `TabSpacing`.
 
 ShelfSuite calculates the right edge of the final tab. Its runtime widget width
-is the larger of the existing 480 px base width and that edge plus the normal
-outer padding. The background and settings gear use that same runtime width.
+is the larger of the existing 480 px base width and that edge. The background
+and settings gear use that same runtime width. This preserves the current
+five-minimum-tab 480 px layout.
 `DynamicWindowSize=1` lets Rainmeter resize the shelf window after this
 calculation. No position, shelf name, tab, item, or `config.lua` data is
 rewritten.

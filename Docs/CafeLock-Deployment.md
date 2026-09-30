@@ -19,7 +19,8 @@ NSIS 3.11. GitHub Actions performs those steps and tests the result.
    the local password before customer use. In Maintenance, configure skins and
    ShelfSuite using normal Rainmeter controls. Its settings gear opens the integrated
    editor with Add/Edit, Browse/drop and automatic icons. ShelfSuite is not bundled;
-   the pinned installed skin engine and assets are retained.
+   the pinned installed skin engine and assets are retained. The F1 adaptive-tab
+   compatibility update is documented separately and is not installed by Setup.
 5. Select Lock Now. Setup enables automatic startup for all Windows users via the
    shared Startup folder. It starts locked after sign-in, not before the login
    screen, and runs as that user. Configure the password in each cafe account before
