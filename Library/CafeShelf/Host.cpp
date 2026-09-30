@@ -208,7 +208,7 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 				const auto result=Storage(options.shelfRoot).Commit(completed->prepared,
 					[this,t=completed->work.ticket](){return Allowed() && control.Allows(t);});
 				reply.ok=result.ok; reply.code=result.code;
-				reply.data=result.ok?Json{{"backup",Utf8(result.value.backup)},{"icon",Utf8(result.value.icon)}}:
+				reply.data=result.ok?Json{{"backup",Utf8(result.value.backup)},{"icon",Utf8(result.value.icon)},{"warning",Utf8(result.value.warning)}}:
 					Json{{"message",Utf8(result.message)}};
 				if(result.ok)
 				{

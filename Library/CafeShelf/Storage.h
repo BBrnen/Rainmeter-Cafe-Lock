@@ -18,7 +18,7 @@ struct Snapshot
 	std::string version;
 	bool example = false;
 };
-struct SaveResult { std::wstring icon, backup; };
+struct SaveResult { std::wstring icon, backup, warning; };
 class PreparedSave;
 class Storage
 {

@@ -103,10 +103,11 @@ std::string Hash(const std::string& bytes)
 	std::string result; const char* digits="0123456789abcdef";
 	for(const auto b:digest){result+=digits[b>>4];result+=digits[b&15];} return result;
 }
-struct ReadResult { std::string bytes, version; };
-ReadResult Read(const std::wstring& path)
+struct ReadResult { std::string bytes, version; DWORD attributes=0; };
+ReadResult Read(const std::wstring& path,Handle* lease=nullptr,bool allowRename=false)
 {
-	Handle file(CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
+	Handle file(CreateFileW(path.c_str(),GENERIC_READ|(allowRename?DELETE:0),
+		FILE_SHARE_READ|(allowRename?FILE_SHARE_DELETE:0),nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
 	if(file.value==INVALID_HANDLE_VALUE)
 	{
 		const auto error=GetLastError();
@@ -117,10 +118,11 @@ ReadResult Read(const std::wstring& path)
 	Need(!(info.dwFileAttributes&(FILE_ATTRIBUTE_REPARSE_POINT|FILE_ATTRIBUTE_DIRECTORY)) && info.nNumberOfLinks==1,
 		Error::Unsupported,L"Redirected or hard-linked configuration files are read-only.");
 	Need(info.nFileSizeHigh==0 && info.nFileSizeLow<=4*1024*1024,Error::Unsupported,L"The configuration is too large.");
-	ReadResult result; result.bytes.resize(info.nFileSizeLow); DWORD read=0;
+	ReadResult result; result.attributes=info.dwFileAttributes; result.bytes.resize(info.nFileSizeLow); DWORD read=0;
 	Need(ReadFile(file.value,result.bytes.empty()?nullptr:&result.bytes[0],info.nFileSizeLow,&read,nullptr)!=FALSE && read==info.nFileSizeLow);
 	result.version=std::to_string(info.dwVolumeSerialNumber)+":"+std::to_string(info.nFileIndexHigh)+":"+
 		std::to_string(info.nFileIndexLow)+":"+Hash(result.bytes);
+	if(lease)*lease=std::move(file);
 	return result;
 }
 std::wstring GuidName()
@@ -139,6 +141,16 @@ std::shared_ptr<OwnedFile> Create(const std::wstring& path,const std::string& by
 	Need(WriteFile(file->handle.value,bytes.data(),static_cast<DWORD>(bytes.size()),&written,nullptr)!=FALSE &&
 		written==bytes.size() && FlushFileBuffers(file->handle.value));
 	return file;
+}
+bool RenameHandle(HANDLE file,const std::wstring& path,bool replace)
+{
+	const size_t length=path.size()*sizeof(wchar_t);
+	std::vector<BYTE> buffer(sizeof(FILE_RENAME_INFO)+length,0);
+	auto rename=reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+	rename->ReplaceIfExists=replace?TRUE:FALSE;
+	rename->FileNameLength=static_cast<DWORD>(length);
+	memcpy(rename->FileName,path.data(),length);
+	return SetFileInformationByHandle(file,FileRenameInfo,rename,static_cast<DWORD>(buffer.size()))!=FALSE;
 }
 ShelfInfo Info(const std::wstring& id,const std::string& ini)
 {
@@ -274,22 +286,57 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 		save->used=true;
 		Need(authorized && authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was saved.");
 		Need(Canonical(m_Root)==save->root,Error::InvalidInput);
-		const auto current=Load(save->snapshot.shelf.id);
-		Need(current.ok && current.value.version==save->snapshot.version,Error::Conflict,L"The configuration changed. Reload it before saving.");
+		const auto folder=save->root+L"\\"+save->snapshot.shelf.id;
+		// Keep the INI stable, and deny in-place config writes through replacement.
+		// DELETE sharing is needed by ReplaceFile; an outside rename is recovered
+		// in its actual-source backup, not discarded as an older snapshot.
+		Handle iniLease,sourceLease;
+		const auto ini=Read(folder+L"\\Shelf.ini",&iniLease);
+		const auto source=Read(save->source,&sourceLease,!save->snapshot.example);
+		Need(ini.version+"|"+source.version+(save->snapshot.example?"|example":"|config")==save->snapshot.version,
+			Error::Conflict,L"The configuration changed. Reload it before saving.");
+		Need(!(source.attributes&FILE_ATTRIBUTE_READONLY),Error::AccessDenied,L"The configuration is read-only. Nothing was saved.");
 		Need(authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was saved.");
-		// Rename the exact flushed temporary handle. This never follows a target
-		// symlink or writes through a hard link; parent handles deny redirection.
-		const size_t length=save->target.size()*sizeof(wchar_t);
-		std::vector<BYTE> buffer(sizeof(FILE_RENAME_INFO)+length,0);
-		auto rename=reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
-		rename->ReplaceIfExists=save->snapshot.example?FALSE:TRUE;
-		rename->FileNameLength=static_cast<DWORD>(length);
-		memcpy(rename->FileName,save->target.data(),length);
-		Need(SetFileInformationByHandle(save->temporary->handle.value,FileRenameInfo,rename,static_cast<DWORD>(buffer.size()))!=FALSE);
+		std::wstring recovery=save->backup->path, warning;
+		if(save->snapshot.example)
+		{
+			// Never replace a config another writer created after the example load.
+			Need(RenameHandle(save->temporary->handle.value,save->target,false));
+		}
+		else
+		{
+			// Reserve a unique actual-version backup separately from our snapshot.
+			auto actual=Create(folder+L"\\config.cafe-previous-"+GuidName()+L".lua","");
+			recovery=actual->path;
+			// ReplaceFile opens its replacement with no sharing. From this point,
+			// preserve recovery/temp files even on ambiguous partial failures.
+			actual->keep=true;actual->handle.Close();
+			save->backup->keep=true;save->backup->handle.Close();
+			save->temporary->keep=true;save->temporary->handle.Close();
+			if(save->icon){save->icon->keep=true;save->icon->handle.Close();}
+			if(!ReplaceFileW(save->target.c_str(),save->temporary->path.c_str(),recovery.c_str(),0,nullptr,nullptr))
+			{
+				const auto error=GetLastError();
+				// Documented partial failure may move the old file to the backup.
+				// Restore only into an absent destination, through the verified handle.
+				if(error==ERROR_UNABLE_TO_MOVE_REPLACEMENT_2)
+				{
+					try { Handle old;Read(recovery,&old,true);RenameHandle(old.value,save->target,false); }
+					catch(...) {}
+				}
+				return {false,{},Error::IoError,L"The save failed. Reload the shelf. Recovery and temporary files were kept beside config.lua."};
+			}
+			try
+			{
+				const auto previous=Read(recovery,nullptr,true);
+				if(previous.version!=source.version)warning=L"An outside edit arrived during saving. Its complete version was kept in the recovery copy.";
+			}
+			catch(...) { warning=L"Saved, but the recovery copy could not be verified. Keep the recovery files beside config.lua."; }
+		}
 		save->temporary->keep=true; save->temporary->handle.Close();
 		save->backup->keep=true; save->backup->handle.Close();
 		if(save->icon){save->icon->keep=true;save->icon->handle.Close();}
-		return {true,{save->iconName,save->backup->path},Error::None,{}};
+		return {true,{save->iconName,recovery,warning},Error::None,{}};
 	}
 	catch(const Problem& p)
 	{

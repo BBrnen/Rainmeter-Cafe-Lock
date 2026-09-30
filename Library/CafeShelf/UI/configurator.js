@@ -134,7 +134,7 @@ async function saveEdit(kind, item = 0, label = '', action = '', icon = '', icon
     try {
         const result = await request('saveEdits', {shelf:shelf.id, version:shelf.version, iconId, edit:editPayload(kind,item,label,action,icon)});
         ++draftGeneration; draft = null; $('itemModal').close(); $('tabModal').close(); $('confirmModal').close();
-        await reload('Saved.' + (result.backup ? ' A recovery copy was kept.' : ''));
+        await reload('Saved.' + (result.warning ? ' ' + result.warning : result.backup ? ' A recovery copy was kept.' : ''));
     } catch (error) {
         if ($('itemModal').open) $('itemError').textContent = error.message;
         else if ($('tabModal').open) $('tabError').textContent = error.message;

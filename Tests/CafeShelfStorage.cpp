@@ -87,9 +87,37 @@ int wmain(int argc,wchar_t** argv) {
 	Check("redirected editing root rejected",!Storage(root+L"\\RedirectedRoot").Discover().ok);
 	// Inject an outside edit at the final authorization boundary: commit must not overwrite it.
 	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
-	int gates=0; const auto raced=Read(hard)+"\n-- final boundary edit\n";
-	auto race=storage.Commit(prepared.value,[&](){if(++gates==2)Write(hard,raced);return true;});
-	Check("final boundary edit is retained or blocked before replacement",(!race.ok && Read(hard)==raced) || (race.ok && Read(race.value.backup)==raced));
+	int gates=0; const auto validated=Read(hard); const auto raced=validated+"\n-- final boundary edit\n";
+	bool writeBlocked=false;
+	auto race=storage.Commit(prepared.value,[&](){
+		if(++gates==2) {
+			HANDLE writer=CreateFileW(hard.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+			writeBlocked=writer==INVALID_HANDLE_VALUE;
+			if(!writeBlocked){CloseHandle(writer);Write(hard,raced);}
+		}
+		return true;
+	});
+	Check("final read lease blocks ordinary concurrent writes",race.ok && writeBlocked && Read(race.value.backup)==validated);
+	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto outsideVersion=Read(hard)+"\n-- outside replacement\n";
+	const auto external=root+L"\\external.lua";Write(external,outsideVersion);gates=0;bool moved=false;
+	auto renameRace=storage.Commit(prepared.value,[&](){
+		if(++gates==2)moved=MoveFileExW(external.c_str(),hard.c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;
+		return true;
+	});
+	Check("concurrent replacement is preserved and reported",renameRace.ok && moved && Read(renameRace.value.backup)==outsideVersion && !renameRace.value.warning.empty());
+	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto busyOriginal=Read(hard);
+	HANDLE busyWriter=CreateFileW(hard.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+	auto busySave=storage.Commit(prepared.value,[](){return true;});
+	Check("existing writer causes safe save failure",busyWriter!=INVALID_HANDLE_VALUE && !busySave.ok && Read(hard)==busyOriginal);
+	if(busyWriter!=INVALID_HANDLE_VALUE)CloseHandle(busyWriter);
+	const auto example=shelf+L"\\config.example.lua";
+	MoveFileW(hard.c_str(),example.c_str());loaded=storage.Load(L"Shelf1");
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");gates=0;
+	auto created=storage.Commit(prepared.value,[&](){if(++gates==2)Write(hard,busyOriginal+"\n-- owner created config\n");return true;});
+	Check("example-based save never overwrites newly created config",loaded.ok && loaded.value.example && prepared.ok && !created.ok &&
+		Read(hard)==busyOriginal+"\n-- owner created config\n");
 	// Compare native replacement behavior in isolated files, never user data.
 	const auto replaceOld=root+L"\\replace-old.txt",replaceNew=root+L"\\replace-new.txt",replaceBackup=root+L"\\replace-backup.txt";
 	Write(replaceOld,"actual outside edit");Write(replaceNew,"prepared edit");
