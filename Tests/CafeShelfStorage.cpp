@@ -34,6 +34,20 @@ int wmain(int argc,wchar_t** argv) {
 	Check("unknown shelf rejected", !storage.Load(L"Shelf999").ok);
 	Check("UNC editing root rejected", !Storage(L"\\\\server\\share").Discover().ok);
 	const std::string original=Read(shelf+L"\\config.lua");
+	// Edit kind 6 is the approved narrow theme operation; it is absent at RED.
+	Edit theme{static_cast<EditKind>(6),0,0,L"Forest",L"",L""};
+	const auto originalIni=Read(shelf+L"\\Shelf.ini");
+	auto themePrepared=storage.Prepare(loaded.value,theme,nullptr,L"");
+	auto themeSaved=storage.Commit(themePrepared.value,[](){return true;});
+	auto forestIni=originalIni;
+	forestIni.replace(forestIni.find("DeepOcean.inc"),13,"Forest.inc");
+	Check("theme save changes only the selected include",themeSaved.ok && Read(shelf+L"\\Shelf.ini")==forestIni && Read(shelf+L"\\config.lua")==original);
+	Check("theme save backs up original skin bytes",themeSaved.ok && Read(themeSaved.value.backup)==originalIni);
+	loaded=storage.Load(L"Shelf1");theme.label=L"..\\outside";
+	Check("theme cannot choose an arbitrary include path",!storage.Prepare(loaded.value,theme,nullptr,L"").ok);
+	theme.label=L"Obsidian";themePrepared=storage.Prepare(loaded.value,theme,nullptr,L"");
+	Check("locked theme save changes no files",!storage.Commit(themePrepared.value,[](){return false;}).ok && Read(shelf+L"\\Shelf.ini")== (themeSaved.ok?forestIni:originalIni));
+	loaded=storage.Load(L"Shelf1");
 	auto image=PrepareIcon({root+L"\\Transparent.png",false});
 	Check("storage fixture icon prepared", image.ok);
 	Edit edit{EditKind::AddItem,0,0,L"Spotify",L"notepad.exe",L"file.png"};

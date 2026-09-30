@@ -1,7 +1,8 @@
 param([Parameter(Mandatory=$true)][string]$Directory)
 $ErrorActionPreference = 'Stop'
-New-Item -ItemType Directory -Path "$Directory/Shelf1", "$Directory/@Resources/Icons" | Out-Null
-$lines = @('[Rainmeter]', '[MeasureEngine]', 'Measure=Script', 'ScriptFile=#@#ShelfEngine.lua')
+New-Item -ItemType Directory -Path "$Directory/Shelf1", "$Directory/@Resources/Icons", "$Directory/@Resources/Themes" | Out-Null
+$lines = @('[Rainmeter]', '@IncludeTheme=#@#Themes\DeepOcean.inc', '; owner comment', '[MeasureEngine]', 'Measure=Script', 'ScriptFile=#@#ShelfEngine.lua')
+foreach ($theme in @('DeepOcean','Forest','Terracotta','Obsidian')) { [IO.File]::WriteAllText("$Directory/@Resources/Themes/$theme.inc", '[Variables]') }
 foreach ($i in 1..5) { $lines += @("[MeterTab$($i)Bg]", 'Meter=Shape', "[MeterTab$($i)Text]", 'Meter=String') }
 foreach ($i in 1..18) { $lines += @("[MeterIcon$i]", 'Meter=Image', "[MeterIcon$($i)Text]", 'Meter=String') }
 [IO.File]::WriteAllLines("$Directory/Shelf1/Shelf.ini", $lines)

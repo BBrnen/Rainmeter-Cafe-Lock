@@ -77,6 +77,9 @@ int main()
 	Json edits={{"shelf","Shelf1"},{"version","native-version"},{"iconId",0},
 		{"edit",{{"kind","addItem"},{"tab",0},{"item",0},{"label","App"},{"action","app.exe"},{"icon","file.png"}}}};
 	Check("typed launcher save accepted", DecodeRequest(Message("saveEdits",edits)).ok);
+	edits["edit"]["kind"]="setTheme"; edits["edit"]["label"]="Forest";
+	Check("typed theme save accepted", DecodeRequest(Message("saveEdits",edits)).ok);
+	edits["edit"]["kind"]="addItem";
 	edits["path"]="C:/outside";
 	Check("save cannot choose a destination path", !DecodeRequest(Message("saveEdits",edits)).ok);
 	edits.erase("path"); edits["edit"]["lua"]="os.execute('bad')";
