@@ -187,15 +187,23 @@ int wmain(int argc, wchar_t** argv) {
 				Script(view.Get(),L"document.getElementById('itemCancelBtn').click();");
 				Check("Cancel closes draft without adding it",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('itemModal').open && !document.getElementById('itemsList').textContent.includes('Keep draft')");}));
-				// Renderer-only transport shim: proves UI wiring, not Windows picker/drop provenance.
+				CreateDirectoryW((options.shelfRoot+L"\\Shelf99").c_str(),nullptr);
+				Script(view.Get(),L"document.getElementById('reloadBtn').click();");
+				Check("broken neighbor leaves healthy UI editable with file warning",Wait([&](){return PageTrue(view.Get(),
+					L"document.getElementById('shelfTitle').textContent==='Shelf1' && !document.getElementById('addItemBtn').disabled && document.getElementById('status').textContent.includes('Shelf99\\\\Shelf.ini') && document.getElementById('status').textContent.includes('Windows error 2')");}));
+				// Actual native Add/Remove with the incomplete neighbor still present.
 				Script(view.Get(),L"document.getElementById('addShelfBtn').click(); document.getElementById('tabName').value='Second shelf tab'; document.getElementById('tabSaveBtn').click();");
 				Check("Add shelf creates and selects its real native files",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('tabModal').open && document.getElementById('shelfTitle').textContent==='Shelf2' && document.getElementById('tabsNav').textContent.includes('Second shelf tab') && !document.getElementById('removeShelfBtn').disabled");}));
+				Check("successful Add reload retains broken neighbor warning",PageTrue(view.Get(),L"document.getElementById('status').textContent.includes('Shelf99\\\\Shelf.ini')"));
 				Script(view.Get(),L"document.getElementById('removeShelfBtn').click();");
 				Check("Remove shelf requires visible confirmation",PageTrue(view.Get(),L"document.getElementById('confirmModal').open && document.getElementById('shelfTitle').textContent==='Shelf2'"));
 				Script(view.Get(),L"document.getElementById('confirmRemove').click();");
 				Check("confirmed removal returns to the remaining shelf",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('confirmModal').open && document.getElementById('shelfTitle').textContent==='Shelf1' && document.querySelectorAll('#shelvesNav button').length===1 && !document.getElementById('addItemBtn').disabled");}));
+				RemoveDirectoryW((options.shelfRoot+L"\\Shelf99").c_str());
+				Script(view.Get(),L"document.getElementById('reloadBtn').click();");
+				Check("reload clears warning after fixture is gone",Wait([&](){return PageTrue(view.Get(),L"!document.getElementById('status').textContent.includes('Shelf99') && !document.getElementById('addItemBtn').disabled");}));
 				// Accelerate only the old 60s transport timeout, holding the actual save
 				// message. It must remain pending until native completion, without retry/cancel.
 				Script(view.Get(),L"window.savedTimer=window.setTimeout; window.expiryCallbacks=[]; window.heldSaves=[]; window.savedPost=chrome.webview.postMessage.bind(chrome.webview); window.setTimeout=(fn,delay,...args)=>delay===60000?(expiryCallbacks.push(fn),0):savedTimer(fn,delay,...args); chrome.webview.postMessage=message=>{if(JSON.parse(message).op==='saveEdits')heldSaves.push(message);else savedPost(message);}; document.getElementById('addShelfBtn').click(); document.getElementById('tabName').value='Delayed shelf'; document.getElementById('tabSaveBtn').click(); expiryCallbacks.forEach(fn=>fn());");
