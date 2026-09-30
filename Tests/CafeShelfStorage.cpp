@@ -177,6 +177,7 @@ int wmain(int argc,wchar_t** argv) {
 	Write(root+L"\\Shelf2\\owner-notes.txt","keep this custom file");
 	Edit removeShelf{EditKind::RemoveShelf,0,0,L"",L"",L""};
 	auto removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
+	Check("completed creation releases its directory for later removal",removal.ok);
 	Check("locked removal leaves the shelf usable",!storage.Commit(removal.value,[](){return false;}).ok && storage.Load(L"Shelf2").ok);
 	removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
 	auto removed=storage.Commit(removal.value,[](){return true;});

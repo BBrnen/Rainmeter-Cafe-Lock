@@ -392,9 +392,13 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 			{
 				const auto id=L"Shelf"+std::to_wstring(n),target=save->root+L"\\"+id;
 				if(RenameHandle(save->directory->handle.value,target,false))
+				{
+					save->directory->handle.Close();
 					return {true,{L"",L"",L"New shelf created. Use Manage / Refresh all to discover and load it.",id},Error::None,{}};
+				}
 				if(GetFileAttributesW(target.c_str())==INVALID_FILE_ATTRIBUTES)break;
 			}
+			save->directory->handle.Close();
 			return {false,{},Error::IoError,L"The shelf could not be published. Its prepared files were retained under @Resources/CafeShelfPending-."};
 		}
 		const auto folder=save->root+L"\\"+save->snapshot.shelf.id;
@@ -407,6 +411,7 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 			Need(authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was removed.");
 			const auto recovery=save->root+L"\\@Resources\\CafeShelfRemoved-"+save->snapshot.shelf.id+L"-"+GuidName();
 			Need(RenameHandle(save->directory->handle.value,recovery,false));
+			save->directory->handle.Close();
 			return {true,{L"",recovery,L"Shelf removed. Its complete folder is retained in the recovery location.",save->snapshot.shelf.id},Error::None,{}};
 		}
 		// Keep the INI stable, and deny in-place config writes through replacement.
