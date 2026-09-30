@@ -88,4 +88,3 @@ The guided standalone updater and its spare-PC/VM checklist are documented in
 separate Windows workflow review artifact; the normal Cafe Lock installer does
 not deploy the F1 patch. Only use an artifact whose exact revision passed full
 verification. Owner manual acceptance remains required before release.
-

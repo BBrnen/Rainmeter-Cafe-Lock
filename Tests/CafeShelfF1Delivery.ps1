@@ -1,11 +1,21 @@
 param(
     [ValidateSet('Package', 'Preflight', 'Apply', 'UI', 'All')][string]$Suite = 'All',
     [string]$PackageDirectory,
-    [Parameter(Mandatory = $true)][string]$UpstreamDirectory
+    [Parameter(Mandatory = $true)][string]$UpstreamDirectory,
+    [switch]$StandardUser
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . "$PSScriptRoot/CafeShelfF1DeliveryFixtures.ps1"
+if ($StandardUser) {
+    if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Restricted-token verification requires a disposable CI runner.' }
+    Assert-True ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -eq 1) 'owner runtime must be Windows PowerShell 5.1'
+    $principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    Assert-True (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) 'restricted test token must not be admin'
+    Assert-True ([CafeF1TestToken]::Integrity() -eq 8192) 'restricted test token must have medium integrity RID 8192'
+    Assert-True ($PackageDirectory -and [IO.Path]::GetFullPath($PackageDirectory).StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)) 'standard-user tests must load extracted package inside RUNNER_TEMP'
+    Write-Output 'PASS standard-user runtime: Windows PowerShell 5.1, admin=false, integrity RID=8192, extracted package'
+}
 $script:Passed = 0
 $repo = Split-Path $PSScriptRoot -Parent
 $upstream = [IO.Path]::GetFullPath($UpstreamDirectory)
@@ -85,6 +95,21 @@ if ($Suite -in @('Package', 'All')) {
         Assert-Refused { Read-F1Package $corrupt } 'duplicate package file'
     }
     Test-Case 'FreshOutputRequired' { Assert-Refused { & $builder -UpstreamDirectory $upstream -OutputDirectory "$scratch/build" } 'existing output' }
+    Test-Case 'ExtractedZipVerifierRejectsCorruptionAndMissingEntry' {
+        Assert-True (Test-Path "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1") 'extracted ZIP verifier must exist'
+        . "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1"
+        $zip=Join-Path "$scratch/build" 'ShelfSuite-Cafe-Lock-F1-Compatibility.zip'
+        Assert-True ((Test-F1DeliveryArchive $zip).Count -eq 8) 'complete ZIP file count incorrect'
+        $bad=Join-Path $scratch 'bad.zip'; [IO.File]::Copy($zip,$bad); [IO.File]::Copy(($zip+'.sha256'),($bad+'.sha256'))
+        [IO.File]::AppendAllText($bad,'corrupt')
+        Assert-Refused { Test-F1DeliveryArchive $bad } 'corrupt archive'
+        $missing=Join-Path $scratch 'missing.zip'
+        $tiny=Join-Path $scratch 'tiny'; [IO.Directory]::CreateDirectory($tiny) | Out-Null
+        Write-Fixture "$tiny/manifest.json" $script:Utf8.GetBytes('{}')
+        [IO.Compression.ZipFile]::CreateFromDirectory($tiny,$missing)
+        Write-Fixture ($missing+'.sha256') $script:Utf8.GetBytes((Hash-Bytes ([IO.File]::ReadAllBytes($missing)))+'  missing.zip')
+        Assert-Refused { Test-F1DeliveryArchive $missing } 'missing packaged entry'
+    }
 }
 if ($Suite -in @('Preflight','All')) {
     Import-Module "$PackageDirectory/Updater.psm1" -Force

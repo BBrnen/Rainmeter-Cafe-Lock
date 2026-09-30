@@ -29,3 +29,26 @@ function Test-Case([string]$Name, [scriptblock]$Action) {
     $script:Passed++
     Write-Output "PASS $Name"
 }
+if (-not ('CafeF1TestToken' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class CafeF1TestToken {
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool OpenProcessToken(IntPtr process,uint access,out IntPtr token);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetTokenInformation(IntPtr token,int type,IntPtr buffer,int length,out int needed);
+    [DllImport("advapi32.dll")] static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
+    [DllImport("advapi32.dll")] static extern IntPtr GetSidSubAuthority(IntPtr sid,uint index);
+    public static int Integrity() {
+        IntPtr token; if(!OpenProcessToken(GetCurrentProcess(),8,out token)) throw new Exception("Token query failed");
+        IntPtr buffer=Marshal.AllocHGlobal(1024);
+        try {
+            int needed; if(!GetTokenInformation(token,25,buffer,1024,out needed)) throw new Exception("Integrity query failed");
+            IntPtr sid=Marshal.ReadIntPtr(buffer); uint count=Marshal.ReadByte(GetSidSubAuthorityCount(sid));
+            return Marshal.ReadInt32(GetSidSubAuthority(sid,count-1));
+        } finally { Marshal.FreeHGlobal(buffer); CloseHandle(token); }
+    }
+}
+'@
+}
