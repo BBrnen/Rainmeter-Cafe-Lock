@@ -184,6 +184,12 @@ bool KnownTheme(const std::wstring& name)
 {
 	return name==L"DeepOcean" || name==L"Forest" || name==L"Terracotta" || name==L"Obsidian";
 }
+std::string ThemeName(const std::wstring& name)
+{
+	Need(KnownTheme(name),Error::Unsupported);
+	std::string result;for(const auto ch:name)result+=static_cast<char>(ch);
+	return result;
+}
 ThemeSpan Theme(const std::string& ini)
 {
 	ThemeSpan result; bool rainmeter=false,found=false;
@@ -208,7 +214,7 @@ ThemeSpan Theme(const std::string& ini)
 					result.end=end;const auto value=ini.substr(result.begin,end-result.begin);
 					for(const auto name:{L"DeepOcean",L"Forest",L"Terracotta",L"Obsidian"})
 					{
-						const std::wstring wide=name; const std::string narrow(wide.begin(),wide.end());
+						const std::wstring wide=name; const auto narrow=ThemeName(wide);
 						if(value=="#@#Themes\\"+narrow+".inc")result.name=wide;
 					}
 				}
@@ -300,7 +306,7 @@ Result<std::shared_ptr<PreparedSave>> Storage::Prepare(const Snapshot& snapshot,
 			for(auto& pin:themePins)save->parents.push_back(std::move(pin));
 			Read(save->root+L"\\@Resources\\Themes\\"+edit.label+L".inc");
 			auto edited=snapshot.iniSource;
-			edited.replace(span.begin,span.end-span.begin,"#@#Themes\\"+std::string(edit.label.begin(),edit.label.end())+".inc");
+			edited.replace(span.begin,span.end-span.begin,"#@#Themes\\"+ThemeName(edit.label)+".inc");
 			save->theme=true;save->source=save->target=folder+L"\\Shelf.ini";
 			save->temporary=Create(folder+L"\\Shelf.cafe-"+GuidName()+L".tmp",edited);
 			save->backup=Create(folder+L"\\Shelf.cafe-backup-"+GuidName()+L".bak",snapshot.iniSource);
