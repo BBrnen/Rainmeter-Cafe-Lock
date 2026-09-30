@@ -6,6 +6,7 @@ namespace CafeShelf {
 static const char ShelfTemplate[] = R"CAFE_TEMPLATE([Rainmeter]
 Update=1000
 AccurateText=1
+DynamicWindowSize=1
 BackgroundMode=2
 SolidColor=0,0,0,1
 Draggable=1
