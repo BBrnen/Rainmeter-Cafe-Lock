@@ -84,9 +84,11 @@ function render() {
 }
 async function reload(message = '') {
     const result = await request('load');
+    $('shelfRoot').textContent = 'ShelfSuite folder: ' + (result.folder || 'Unavailable');
     shelves = result.shelves || [];
     if (!shelves.some(shelf => shelf.id === shelfId)) shelfId = shelves[0]?.id || '';
-    render(); if (message) status(message); else status(result.message || 'Choose a shelf and tab, then Add Item or Edit.');
+    render();
+    status([message, result.message].filter(Boolean).join('\n') || 'Choose a shelf and tab, then Add Item or Edit.');
 }
 function setWorking(value) {
     working = value;

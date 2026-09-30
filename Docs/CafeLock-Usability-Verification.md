@@ -117,3 +117,40 @@ The independent review's minor cache-cleanup finding is deferred: each editor
 lifetime creates a private temporary WebView profile, which can consume disk over
 repeated use. Automatic ownership-checked cleanup after browser-process exit is
 not implemented in this feature. It does not grant new editing authority.
+
+## Shelf-loading blocker retest (2026-10-01)
+
+The owner's real installation exposed an all-or-nothing discovery bug. An
+unreadable or missing Shelf.ini in one ShelfN folder discarded the complete
+discovery result. The focused fix retains healthy shelves, reports each skipped
+folder/file with a safe reason (including Windows read-error number), and reports
+configuration parsing failures separately. Folder diagnostics shows the root
+Rainmeter supplied. Discovery and reload never repair or rewrite installed files.
+
+On a spare PC/VM using the new review artifact:
+1. Back up the existing Shelf Suite folder. Install the review build on this
+   disposable machine; use the same standard-user profile and existing skins.
+2. Start locked. Confirm existing launcher clicks still work and the gear cannot
+   open the editor. Unlock with the existing password and open the gear.
+3. Expand Folder diagnostics and confirm the root is the installed Shelf Suite.
+   Shelf1/Shelf2/Shelf3 and their ONLINE/OFFLINE/INTERNET tabs should be available.
+   Record any warnings verbatim; do not manually repair existing folders yet.
+4. Without changing existing files, create one new, empty, unused ShelfN folder
+   (for example Shelf999 if it does not already exist). Click Reload shelves.
+   The healthy shelves must stay usable; a warning must name Shelf999/Shelf.ini
+   and Windows error 2. No automatic deletion or repair should occur.
+5. Click Add shelf, enter a temporary test name and save. The new shelf must
+   immediately appear and be selected after reload. The broken-folder warning
+   must remain visible. New desktop loading still uses normal Rainmeter Manage.
+6. Compare the original three config.lua files with the backup: loading, reload,
+   and Add shelf must not change those bytes. Select each original shelf and
+   check its existing tabs/items without saving edits.
+7. Click Lock Now and confirm the editor closes and existing launchers work.
+   Restart Rainmeter and confirm it starts locked again.
+8. Send the result and any warning text. Leave original folders/configs intact.
+   Test-only folders may be removed manually after recording results.
+
+Automated mixed-shelf tests also cover locked files, actual Windows read-access
+denial, malformed INI/Lua, missing config fallback, warning privacy, unchanged
+configuration bytes, and actual WebView Add/reload. They do not establish which
+specific file failed on the owner's machine. Manual acceptance remains pending.

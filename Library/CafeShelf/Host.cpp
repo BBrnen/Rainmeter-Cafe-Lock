@@ -229,10 +229,11 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 		StartJob(work,[root](Job& task)
 		{
 			task.reply.ok=true;task.reply.code=Error::None;
-			task.reply.data={{"mode","maintenance"},{"canSave",false},{"shelves",Json::array()}};
+			task.reply.data={{"mode","maintenance"},{"canSave",false},{"shelves",Json::array()},{"folder",Utf8(root)}};
 			if(root.empty())return;
 			const Storage storage(root); const auto found=storage.Discover();
 			if(!found.ok){task.reply.data["message"]=Utf8(found.message);return;}
+			auto warnings=found.message;
 			for(const auto& shelf:found.value)
 			{
 				if(task.cancelled.load())return;
@@ -242,8 +243,13 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 					task.reply.data["shelves"].push_back(Model(loaded.value));
 					task.snapshots.emplace(shelf.id,std::move(loaded.value));
 				}
-				else task.reply.data["shelves"].push_back({{"id",Utf8(shelf.id)},{"tabs",Json::array()},{"error",Utf8(loaded.message)}});
+				else
+				{
+					task.reply.data["shelves"].push_back({{"id",Utf8(shelf.id)},{"tabs",Json::array()},{"error",Utf8(loaded.message)}});
+					warnings+=L"Not editable: "+loaded.message+L"\n";
+				}
 			}
+			if(!warnings.empty())task.reply.data["message"]=Utf8(warnings);
 			task.reply.data["canSave"]=!task.snapshots.empty();
 		});
 	}

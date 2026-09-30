@@ -12,7 +12,8 @@ namespace CafeShelf
 {
 namespace
 {
-struct Problem { Error code; const wchar_t* message; };
+struct Problem { Error code; std::wstring message; };
+std::wstring ReadError(DWORD error);
 void Need(bool ok, Error code=Error::IoError, const wchar_t* message=L"The save could not complete. Your previous configuration is retained.")
 {
 	if(!ok)throw Problem{code,message};
@@ -87,7 +88,8 @@ Pins Pin(const std::wstring& path)
 		Handle h(CreateFileW(prefix.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
 			OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
 		BY_HANDLE_FILE_INFORMATION info={};
-		Need(h.value!=INVALID_HANDLE_VALUE && GetFileInformationByHandle(h.value,&info),Error::AccessDenied,L"The ShelfSuite folder cannot be opened safely.");
+		if(h.value==INVALID_HANDLE_VALUE || !GetFileInformationByHandle(h.value,&info))
+			throw Problem{Error::AccessDenied,L"The ShelfSuite folder cannot be opened safely: "+ReadError(GetLastError())};
 		Need((info.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)!=0 && !(info.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT),
 			Error::Unsupported,L"Editing through a redirected folder is not supported.");
 		// FileCaseSensitiveInfo (Windows 10+) has one ULONG Flags field.
@@ -116,6 +118,18 @@ std::string Hash(const std::string& bytes)
 	for(const auto b:digest){result+=digits[b>>4];result+=digits[b&15];} return result;
 }
 struct ReadResult { std::string bytes, version; DWORD attributes=0; };
+std::wstring ReadError(DWORD error)
+{
+	const wchar_t* reason=L"The file could not be opened for safe reading";
+	switch(error)
+	{
+	case ERROR_FILE_NOT_FOUND:reason=L"The file is missing";break;
+	case ERROR_PATH_NOT_FOUND:reason=L"The containing folder is missing";break;
+	case ERROR_ACCESS_DENIED:reason=L"Windows denied read access";break;
+	case ERROR_SHARING_VIOLATION:case ERROR_LOCK_VIOLATION:reason=L"The file is in use or locked";break;
+	}
+	return std::wstring(reason)+L" (Windows error "+std::to_wstring(error)+L").";
+}
 ReadResult Read(const std::wstring& path,Handle* lease=nullptr,bool allowRename=false)
 {
 	Handle file(CreateFileW(path.c_str(),GENERIC_READ|(allowRename?DELETE:0),
@@ -123,15 +137,17 @@ ReadResult Read(const std::wstring& path,Handle* lease=nullptr,bool allowRename=
 	if(file.value==INVALID_HANDLE_VALUE)
 	{
 		const auto error=GetLastError();
-		throw Problem{error==ERROR_FILE_NOT_FOUND?Error::NotFound:Error::AccessDenied,L"The configuration is missing, busy or not readable."};
+		throw Problem{error==ERROR_FILE_NOT_FOUND || error==ERROR_PATH_NOT_FOUND?Error::NotFound:Error::AccessDenied,ReadError(error)};
 	}
 	BY_HANDLE_FILE_INFORMATION info={};
-	Need(GetFileInformationByHandle(file.value,&info)!=FALSE);
+	if(!GetFileInformationByHandle(file.value,&info))throw Problem{Error::IoError,ReadError(GetLastError())};
 	Need(!(info.dwFileAttributes&(FILE_ATTRIBUTE_REPARSE_POINT|FILE_ATTRIBUTE_DIRECTORY)) && info.nNumberOfLinks==1,
 		Error::Unsupported,L"Redirected or hard-linked configuration files are read-only.");
 	Need(info.nFileSizeHigh==0 && info.nFileSizeLow<=4*1024*1024,Error::Unsupported,L"The configuration is too large.");
 	ReadResult result; result.attributes=info.dwFileAttributes; result.bytes.resize(info.nFileSizeLow); DWORD read=0;
-	Need(ReadFile(file.value,result.bytes.empty()?nullptr:&result.bytes[0],info.nFileSizeLow,&read,nullptr)!=FALSE && read==info.nFileSizeLow);
+	if(!ReadFile(file.value,result.bytes.empty()?nullptr:&result.bytes[0],info.nFileSizeLow,&read,nullptr))
+		throw Problem{Error::IoError,ReadError(GetLastError())};
+	Need(read==info.nFileSizeLow,Error::Conflict,L"The file changed while it was being read. Reload the shelf.");
 	result.version=std::to_string(info.dwVolumeSerialNumber)+":"+std::to_string(info.nFileIndexHigh)+":"+
 		std::to_string(info.nFileIndexLow)+":"+Hash(result.bytes);
 	if(lease)*lease=std::move(file);
@@ -260,41 +276,59 @@ Result<std::vector<ShelfInfo>> Storage::Discover() const
 		WIN32_FIND_DATAW entry={}; const auto find=FindFirstFileW((root+L"\\Shelf*").c_str(),&entry);
 		Need(find!=INVALID_HANDLE_VALUE,Error::NotFound,L"No installed ShelfSuite shelves were found.");
 		struct FindCloseGuard{HANDLE h;~FindCloseGuard(){FindClose(h);}} guard{find};
-		std::vector<ShelfInfo> shelves;
+		std::vector<ShelfInfo> shelves; std::wstring warnings;
 		do
 		{
 			if(!(entry.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) || !ShelfId(entry.cFileName))continue;
 			const std::wstring id=entry.cFileName;
-			auto childPins=Pin(root+L"\\"+id);
-			shelves.push_back(Info(id,Read(root+L"\\"+id+L"\\Shelf.ini").bytes));
+			// A broken neighbor is a local warning, not a failed installation.
+			// Keep all containment and file-identity checks; never repair user files.
+			try
+			{
+				auto childPins=Pin(root+L"\\"+id);
+				shelves.push_back(Info(id,Read(root+L"\\"+id+L"\\Shelf.ini").bytes));
+			}
+			catch(const Problem& p)
+			{
+				warnings+=L"Not editable: "+id+L"\\Shelf.ini: "+p.message+L"\n";
+			}
+			catch(...){warnings+=L"Not editable: "+id+L"\\Shelf.ini: The shelf could not be inspected safely.\n";}
 		}while(FindNextFileW(find,&entry));
 		Need(GetLastError()==ERROR_NO_MORE_FILES);
 		std::sort(shelves.begin(),shelves.end(),[](const ShelfInfo& a,const ShelfInfo& b){return a.id<b.id;});
-		return {true,std::move(shelves),Error::None,{}};
+		return {true,std::move(shelves),Error::None,std::move(warnings)};
 	}
 	catch(const Problem& p){return Failed<std::vector<ShelfInfo>>(p);}
 	catch(...){return Failed<std::vector<ShelfInfo>>({Error::IoError,L"ShelfSuite folders could not be read."});}
 }
 Result<Snapshot> Storage::Load(const std::wstring& shelf) const
 {
+	std::wstring relative;
 	try
 	{
 		Need(ShelfId(shelf),Error::InvalidInput,L"Choose an installed shelf.");
+		relative=shelf+L"\\Shelf.ini";
 		const auto root=Canonical(m_Root); const auto folder=root+L"\\"+shelf; auto pins=Pin(folder);
 		const auto ini=Read(folder+L"\\Shelf.ini");
 		Snapshot snapshot; snapshot.shelf=Info(shelf,ini.bytes);
 		snapshot.iniSource=ini.bytes;snapshot.theme=Theme(ini.bytes).name;
 		ReadResult config;
+		relative=shelf+L"\\config.lua";
 		try {config=Read(folder+L"\\config.lua");}
-		catch(const Problem& p){if(p.code!=Error::NotFound)throw;config=Read(folder+L"\\config.example.lua");snapshot.example=true;}
+		catch(const Problem& p)
+		{
+			if(p.code!=Error::NotFound)throw;
+			relative=shelf+L"\\config.example.lua";
+			config=Read(folder+L"\\config.example.lua");snapshot.example=true;
+		}
 		auto document=ParseConfig(config.bytes);
 		Need(document.ok,document.code, L"This configuration contains unsupported Lua or encoding. It is read-only; existing contents are unchanged.");
 		snapshot.document=std::move(document.value);
 		snapshot.version=ini.version+"|"+config.version+(snapshot.example?"|example":"|config");
 		return {true,std::move(snapshot),Error::None,{}};
 	}
-	catch(const Problem& p){return Failed<Snapshot>(p);}
-	catch(...){return Failed<Snapshot>({Error::IoError,L"The shelf could not be loaded safely."});}
+	catch(const Problem& p){return Failed<Snapshot>({p.code,relative.empty()?p.message:relative+L": "+p.message});}
+	catch(...){return Failed<Snapshot>({Error::IoError,relative+L": The shelf could not be loaded safely."});}
 }
 Result<std::shared_ptr<PreparedSave>> Storage::Prepare(const Snapshot& snapshot,const Edit& edit,
 	const PngImage* image,const std::wstring& iconName) const
