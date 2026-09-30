@@ -1,5 +1,6 @@
 #include "../Library/CafeShelf/Storage.h"
 #include <windows.h>
+#include <objbase.h>
 #include <fstream>
 #include <iostream>
 using namespace CafeShelf;

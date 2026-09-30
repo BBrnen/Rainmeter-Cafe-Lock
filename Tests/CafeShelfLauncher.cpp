@@ -1,5 +1,6 @@
 #include "../Library/CafeShelf/Launcher.h"
 #include <windows.h>
+#include <objbase.h>
 #include <iostream>
 using namespace CafeShelf;
 namespace {
