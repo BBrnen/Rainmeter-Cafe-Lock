@@ -55,6 +55,8 @@ function render() {
     if (tabIndex >= tabs.length) tabIndex = 0;
     $('shelfTitle').textContent = shelf?.id || 'No shelves available';
     $('shelfError').textContent = shelf?.error || '';
+    $('themeSelect').value = shelf?.theme || '';
+    $('themeSelect').disabled = $('themeSaveBtn').disabled = working || !shelf?.theme || !!shelf?.error;
     tabs.forEach((tab, index) => {
         const entry = button(tab.name, () => { tabIndex = index; render(); });
         entry.setAttribute('aria-current', String(index === tabIndex)); entry.disabled = working;
@@ -149,6 +151,7 @@ function openTab(kind) {
     $('tabError').textContent = ''; $('tabModal').showModal(); $('tabName').focus();
 }
 $('addItemBtn').addEventListener('click', () => openItem());
+$('themeSaveBtn').addEventListener('click', () => saveEdit('setTheme',0,$('themeSelect').value));
 $('browseLauncher').addEventListener('click', () => importItem('browseLauncher', 'launcher'));
 $('browseFolder').addEventListener('click', () => importItem('browseFolder', 'launcher'));
 $('browseIcon').addEventListener('click', () => importItem('browseIcon', 'icon'));

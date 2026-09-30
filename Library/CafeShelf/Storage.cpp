@@ -179,6 +179,45 @@ ShelfInfo Info(const std::wstring& id,const std::string& ini)
 	Need(result.tabCapacity && result.itemCapacity,Error::Unsupported,L"The shelf has no recognized launcher meters.");
 	return result;
 }
+struct ThemeSpan { size_t begin=0,end=0; std::wstring name; };
+bool KnownTheme(const std::wstring& name)
+{
+	return name==L"DeepOcean" || name==L"Forest" || name==L"Terracotta" || name==L"Obsidian";
+}
+ThemeSpan Theme(const std::string& ini)
+{
+	ThemeSpan result; bool rainmeter=false,found=false;
+	for(size_t start=0;start<ini.size();)
+	{
+		const auto newline=ini.find('\n',start), next=newline==std::string::npos?ini.size():newline+1;
+		auto end=newline==std::string::npos?ini.size():newline;
+		while(end>start && (ini[end-1]=='\r' || ini[end-1]==' ' || ini[end-1]=='\t'))--end;
+		auto first=start;while(first<end && (ini[first]==' ' || ini[first]=='\t'))++first;
+		const auto line=ini.substr(first,end-first);
+		if(!line.empty() && line.front()=='[')rainmeter=_stricmp(line.c_str(),"[Rainmeter]")==0;
+		else if(rainmeter && !line.empty() && line.front()!=';')
+		{
+			const auto equal=line.find('=');
+			if(equal!=std::string::npos)
+			{
+				auto key=line.substr(0,equal);while(!key.empty() && (key.back()==' ' || key.back()=='\t'))key.pop_back();
+				if(_stricmp(key.c_str(),"@IncludeTheme")==0)
+				{
+					if(found)return {};found=true;
+					result.begin=first+equal+1;while(result.begin<end && (ini[result.begin]==' ' || ini[result.begin]=='\t'))++result.begin;
+					result.end=end;const auto value=ini.substr(result.begin,end-result.begin);
+					for(const auto name:{L"DeepOcean",L"Forest",L"Terracotta",L"Obsidian"})
+					{
+						const std::wstring wide=name; const std::string narrow(wide.begin(),wide.end());
+						if(value=="#@#Themes\\"+narrow+".inc")result.name=wide;
+					}
+				}
+			}
+		}
+		start=next;
+	}
+	return result;
+}
 template<class T> Result<T> Failed(const Problem& p){Result<T> r;r.code=p.code;r.message=p.message;return r;}
 }
 class PreparedSave
@@ -190,6 +229,7 @@ public:
 	std::shared_ptr<OwnedFile> temporary, icon, backup;
 	std::wstring iconName;
 	bool used=false;
+	bool theme=false;
 };
 Storage::Storage(std::wstring root):m_Root(std::move(root)){}
 Result<std::vector<ShelfInfo>> Storage::Discover() const
@@ -223,6 +263,7 @@ Result<Snapshot> Storage::Load(const std::wstring& shelf) const
 		const auto root=Canonical(m_Root); const auto folder=root+L"\\"+shelf; auto pins=Pin(folder);
 		const auto ini=Read(folder+L"\\Shelf.ini");
 		Snapshot snapshot; snapshot.shelf=Info(shelf,ini.bytes);
+		snapshot.iniSource=ini.bytes;snapshot.theme=Theme(ini.bytes).name;
 		ReadResult config;
 		try {config=Read(folder+L"\\config.lua");}
 		catch(const Problem& p){if(p.code!=Error::NotFound)throw;config=Read(folder+L"\\config.example.lua");snapshot.example=true;}
@@ -251,6 +292,20 @@ Result<std::shared_ptr<PreparedSave>> Storage::Prepare(const Snapshot& snapshot,
 		save->target=folder+L"\\config.lua";
 		save->source=folder+(snapshot.example?L"\\config.example.lua":L"\\config.lua");
 		save->snapshot=snapshot; Edit finalEdit=edit;
+		if(edit.kind==EditKind::SetTheme)
+		{
+			const auto span=Theme(snapshot.iniSource);
+			Need(!image && KnownTheme(edit.label) && !span.name.empty(),Error::Unsupported,L"Choose a supported theme. Custom or ambiguous theme includes are left unchanged.");
+			auto themePins=Pin(save->root+L"\\@Resources\\Themes");
+			for(auto& pin:themePins)save->parents.push_back(std::move(pin));
+			Read(save->root+L"\\@Resources\\Themes\\"+edit.label+L".inc");
+			auto edited=snapshot.iniSource;
+			edited.replace(span.begin,span.end-span.begin,"#@#Themes\\"+std::string(edit.label.begin(),edit.label.end())+".inc");
+			save->theme=true;save->source=save->target=folder+L"\\Shelf.ini";
+			save->temporary=Create(folder+L"\\Shelf.cafe-"+GuidName()+L".tmp",edited);
+			save->backup=Create(folder+L"\\Shelf.cafe-backup-"+GuidName()+L".bak",snapshot.iniSource);
+			return {true,save,Error::None,{}};
+		}
 		if(image)
 		{
 			Need(!image->bytes.empty() && image->bytes.size()<=1024*1024 && image->width>0 && image->height>0 &&
@@ -291,14 +346,15 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 		// DELETE sharing is needed by ReplaceFile; an outside rename is recovered
 		// in its actual-source backup, not discarded as an older snapshot.
 		Handle iniLease,sourceLease;
-		const auto ini=Read(folder+L"\\Shelf.ini",&iniLease);
-		const auto source=Read(save->source,&sourceLease,!save->snapshot.example);
-		Need(ini.version+"|"+source.version+(save->snapshot.example?"|example":"|config")==save->snapshot.version,
+		const auto ini=Read(folder+L"\\Shelf.ini",&iniLease,save->theme);
+		const auto config=Read(folder+(save->snapshot.example?L"\\config.example.lua":L"\\config.lua"),&sourceLease,!save->theme && !save->snapshot.example);
+		const auto& source=save->theme?ini:config;
+		Need(ini.version+"|"+config.version+(save->snapshot.example?"|example":"|config")==save->snapshot.version,
 			Error::Conflict,L"The configuration changed. Reload it before saving.");
 		Need(!(source.attributes&FILE_ATTRIBUTE_READONLY),Error::AccessDenied,L"The configuration is read-only. Nothing was saved.");
 		Need(authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was saved.");
 		std::wstring recovery=save->backup->path, warning;
-		if(save->snapshot.example)
+		if(save->snapshot.example && !save->theme)
 		{
 			// Never replace a config another writer created after the example load.
 			Need(RenameHandle(save->temporary->handle.value,save->target,false));
@@ -306,7 +362,7 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 		else
 		{
 			// Reserve a unique actual-version backup separately from our snapshot.
-			auto actual=Create(folder+L"\\config.cafe-previous-"+GuidName()+L".lua","");
+			auto actual=Create(folder+(save->theme?L"\\Shelf.cafe-previous-":L"\\config.cafe-previous-")+GuidName()+(save->theme?L".bak":L".lua"),"");
 			recovery=actual->path;
 			// ReplaceFile opens its replacement with no sharing. From this point,
 			// preserve recovery/temp files even on ambiguous partial failures.

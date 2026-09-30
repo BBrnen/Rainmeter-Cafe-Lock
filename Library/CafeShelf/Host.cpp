@@ -131,7 +131,7 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 		}
 		return {{"id",Utf8(snapshot.shelf.id)},{"version",snapshot.version},
 			{"tabCapacity",snapshot.shelf.tabCapacity},{"itemCapacity",snapshot.shelf.itemCapacity},
-			{"defaultIcon",Utf8(snapshot.document.defaultIcon)},{"tabs",std::move(tabs)}};
+			{"defaultIcon",Utf8(snapshot.document.defaultIcon)},{"theme",Utf8(snapshot.theme)},{"tabs",std::move(tabs)}};
 	}
 	void StartJob(const Work& work, std::function<void(Job&)> action)
 	{
@@ -293,7 +293,7 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 		}
 		const auto& data=payload["edit"];
 		const std::map<std::string,EditKind> kinds={{"setItem",EditKind::SetItem},{"addItem",EditKind::AddItem},
-			{"removeItem",EditKind::RemoveItem},{"renameTab",EditKind::RenameTab},{"addTab",EditKind::AddTab},{"removeTab",EditKind::RemoveTab}};
+			{"removeItem",EditKind::RemoveItem},{"renameTab",EditKind::RenameTab},{"addTab",EditKind::AddTab},{"removeTab",EditKind::RemoveTab},{"setTheme",EditKind::SetTheme}};
 		Edit edit{kinds.at(data["kind"].get<std::string>()),data["tab"].get<size_t>(),data["item"].get<size_t>(),
 			Wide(data["label"].get<std::string>()),Wide(data["action"].get<std::string>()),Wide(data["icon"].get<std::string>())};
 		const auto snapshot=found->second; const auto root=options.shelfRoot;

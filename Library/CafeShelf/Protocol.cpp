@@ -122,7 +122,8 @@ Result<Request> DecodeRequest(const std::string& utf8)
 				!edit.contains("icon") || !edit["icon"].is_string()) return result;
 			const auto kind=edit["kind"].get<std::string>();
 			if(kind!="setItem" && kind!="addItem" && kind!="removeItem" &&
-				kind!="renameTab" && kind!="addTab" && kind!="removeTab") return result;
+				kind!="renameTab" && kind!="addTab" && kind!="removeTab" && kind!="setTheme") return result;
+			if(kind!="setItem" && kind!="addItem" && payload["iconId"].get<uint64_t>()!=0) return result;
 			if(edit["tab"].get<uint64_t>()>100000 || edit["item"].get<uint64_t>()>100000) return result;
 			operation=Operation::SaveEdits;
 		}

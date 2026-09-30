@@ -16,6 +16,8 @@ struct Snapshot
 	ShelfInfo shelf;
 	ShelfDocument document;
 	std::string version;
+	std::string iniSource;
+	std::wstring theme;
 	bool example = false;
 };
 struct SaveResult { std::wstring icon, backup, warning; };

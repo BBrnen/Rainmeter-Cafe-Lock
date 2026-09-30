@@ -34,8 +34,7 @@ int wmain(int argc,wchar_t** argv) {
 	Check("unknown shelf rejected", !storage.Load(L"Shelf999").ok);
 	Check("UNC editing root rejected", !Storage(L"\\\\server\\share").Discover().ok);
 	const std::string original=Read(shelf+L"\\config.lua");
-	// Edit kind 6 is the approved narrow theme operation; it is absent at RED.
-	Edit theme{static_cast<EditKind>(6),0,0,L"Forest",L"",L""};
+	Edit theme{EditKind::SetTheme,0,0,L"Forest",L"",L""};
 	const auto originalIni=Read(shelf+L"\\Shelf.ini");
 	auto themePrepared=storage.Prepare(loaded.value,theme,nullptr,L"");
 	auto themeSaved=storage.Commit(themePrepared.value,[](){return true;});

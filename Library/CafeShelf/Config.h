@@ -22,7 +22,7 @@ struct ShelfDocument
 	std::vector<ShelfTab> tabs;
 	std::wstring defaultIcon;
 };
-enum class EditKind { SetItem, AddItem, RemoveItem, RenameTab, AddTab, RemoveTab };
+enum class EditKind { SetItem, AddItem, RemoveItem, RenameTab, AddTab, RemoveTab, SetTheme };
 struct Edit
 {
 	EditKind kind = EditKind::SetItem;

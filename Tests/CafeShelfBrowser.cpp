@@ -163,6 +163,12 @@ int wmain(int argc, wchar_t** argv) {
 				L"document.querySelector('#itemsList .edit-item')!==null");},5000);
 			Check("installed shelf loads into final interface",editorReady);
 			if(editorReady) {
+				Script(view.Get(),L"if(document.getElementById('themeSelect')) { document.getElementById('themeSelect').value='Forest'; document.getElementById('themeSaveBtn').click(); }");
+				Check("theme control waits for native save",Wait([&](){return PageTrue(view.Get(),
+					L"document.getElementById('themeSelect')?.value==='Forest' && document.getElementById('status').textContent.includes('Saved') && !document.getElementById('themeSaveBtn').disabled");},5000));
+				std::ifstream themeFile(options.shelfRoot+L"\\Shelf1\\Shelf.ini",std::ios::binary);
+				const std::string themeBytes(std::istreambuf_iterator<char>(themeFile),{});themeFile.close();
+				Check("theme control writes the native include",themeBytes.find("@IncludeTheme=#@#Themes\\Forest.inc")!=std::string::npos);
 				Script(view.Get(),L"document.getElementById('addItemBtn').click();");
 				Check("Add opens launcher fields",PageTrue(view.Get(),L"document.getElementById('itemModal').open"));
 				Script(view.Get(),L"document.getElementById('itemLabel').value='Added fixture'; document.getElementById('itemAction').value='notepad.exe'; document.getElementById('itemIcon').value='file.png'; document.getElementById('itemSaveBtn').click(); document.getElementById('itemSaveBtn').click();");
