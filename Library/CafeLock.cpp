@@ -168,11 +168,14 @@ bool CafeShelf::TryOpen(const wchar_t* file)
 	if (!CafeLock::IsLocked())
 	{
 		OpenEditor(GetRainmeter().GetModuleInstance(), skinPath + L"Shelf Suite\\",
-			CafeLock::IsLocked, CafeLock::LockNow, [](const std::wstring& shelf)
+			CafeLock::IsLocked, CafeLock::LockNow, [](const std::wstring& shelf, bool removed)
 			{
 				if (CafeLock::IsLocked()) return;
 				if (auto skin = GetRainmeter().GetSkin(L"Shelf Suite\\" + shelf))
-					PostMessageW(skin->GetWindow(), WM_METERWINDOW_DELAYED_REFRESH, 0, 0);
+				{
+					if (removed) GetRainmeter().DeactivateSkin(skin, -1);
+					else PostMessageW(skin->GetWindow(), WM_METERWINDOW_DELAYED_REFRESH, 0, 0);
+				}
 			});
 	}
 	return true;

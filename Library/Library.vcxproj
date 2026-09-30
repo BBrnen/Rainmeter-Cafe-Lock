@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(SolutionDir)Build\VS\Rainmeter.Cpp.Default.props" />
   <PropertyGroup Label="Globals">
@@ -180,6 +180,7 @@
     <ClInclude Include="CafeShelf\Icons.h" />
     <ClInclude Include="CafeShelf\Config.h" />
     <ClInclude Include="CafeShelf\Storage.h" />
+    <ClInclude Include="CafeShelf\ShelfTemplate.h" />
     <ClInclude Include="CafeShelf\Json.h" />
     <ClInclude Include="CafeShelf\Types.h" />
     <ClInclude Include="CafeShelf\Session.h" />

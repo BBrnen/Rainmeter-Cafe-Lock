@@ -76,6 +76,8 @@ function render() {
     $('renameTabBtn').disabled = working || !tabs.length;
     $('removeTabBtn').disabled = working || tabs.length <= 1;
     $('reloadBtn').disabled = working;
+    $('addShelfBtn').disabled = working;
+    $('removeShelfBtn').disabled = working || !shelf || !!shelf.error;
 }
 async function reload(message = '') {
     const result = await request('load');
@@ -130,11 +132,12 @@ function editPayload(kind, item = 0, label = '', action = '', icon = '') {
 }
 async function saveEdit(kind, item = 0, label = '', action = '', icon = '', iconId = 0) {
     if (working) return;
-    const shelf = currentShelf(); if (!shelf || shelf.error) return;
+    const shelf = currentShelf(); if (kind !== 'addShelf' && (!shelf || shelf.error)) return;
     status('Saving…'); $('itemError').textContent = ''; $('tabError').textContent = '';
     setWorking(true);
     try {
-        const result = await request('saveEdits', {shelf:shelf.id, version:shelf.version, iconId, edit:editPayload(kind,item,label,action,icon)});
+        const result = await request('saveEdits', {shelf:shelf?.id || '', version:shelf?.version || '', iconId, edit:editPayload(kind,item,label,action,icon)});
+        if(kind === 'addShelf') shelfId = result.shelf;
         ++draftGeneration; draft = null; $('itemModal').close(); $('tabModal').close(); $('confirmModal').close();
         await reload('Saved.' + (result.warning ? ' ' + result.warning : result.backup ? ' A recovery copy was kept.' : ''));
     } catch (error) {
@@ -146,8 +149,8 @@ async function saveEdit(kind, item = 0, label = '', action = '', icon = '', icon
 function confirm(text, action) { if(working)return; confirmAction = action; $('confirmText').textContent = text; $('confirmModal').showModal(); }
 function openTab(kind) {
     if(working)return; tabKind = kind;
-    $('tabHeading').textContent = kind === 'addTab' ? 'Add tab' : 'Rename tab';
-    $('tabName').value = kind === 'addTab' ? '' : currentShelf().tabs[tabIndex].name;
+    $('tabHeading').textContent = kind === 'addShelf' ? 'Add shelf — first tab name' : kind === 'addTab' ? 'Add tab' : 'Rename tab';
+    $('tabName').value = kind === 'addShelf' ? 'Apps' : kind === 'addTab' ? '' : currentShelf().tabs[tabIndex].name;
     $('tabError').textContent = ''; $('tabModal').showModal(); $('tabName').focus();
 }
 $('addItemBtn').addEventListener('click', () => openItem());
@@ -163,9 +166,11 @@ $('itemForm').addEventListener('submit', event => {
     saveEdit(draft.index === null ? 'addItem' : 'setItem', draft.index || 0, $('itemLabel').value, $('itemAction').value, $('itemIcon').value, draft.iconId);
 });
 $('addTabBtn').addEventListener('click', () => openTab('addTab'));
+$('addShelfBtn').addEventListener('click', () => openTab('addShelf'));
+$('removeShelfBtn').addEventListener('click', () => confirm('Remove this shelf? Its complete folder, including custom files, will be kept under @Resources as a recovery copy.', () => saveEdit('removeShelf')));
 $('renameTabBtn').addEventListener('click', () => openTab('renameTab'));
 $('removeTabBtn').addEventListener('click', () => confirm('Remove this tab and its launcher entries? The old config will be kept as a recovery copy.', () => saveEdit('removeTab')));
-$('tabForm').addEventListener('submit', event => { event.preventDefault(); saveEdit(tabKind,0,$('tabName').value); });
+$('tabForm').addEventListener('submit', event => { event.preventDefault(); saveEdit(tabKind,0,$('tabName').value,tabKind === 'addShelf' ? 'DeepOcean' : ''); });
 $('tabCancelBtn').addEventListener('click', () => { if(!working)$('tabModal').close(); });
 $('tabModal').addEventListener('cancel', event => { if(working)event.preventDefault(); });
 $('confirmCancel').addEventListener('click', () => { if(!working)$('confirmModal').close(); });

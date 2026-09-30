@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="CafeShelf" />
@@ -270,6 +270,7 @@
     <ClInclude Include="CafeShelf\Config.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClCompile Include="CafeShelf\Storage.cpp"><Filter>CafeShelf</Filter></ClCompile>
     <ClInclude Include="CafeShelf\Storage.h"><Filter>CafeShelf</Filter></ClInclude>
+    <ClInclude Include="CafeShelf\ShelfTemplate.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Json.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Types.h"><Filter>CafeShelf</Filter></ClInclude>
     <ClInclude Include="CafeShelf\Session.h"><Filter>CafeShelf</Filter></ClInclude>

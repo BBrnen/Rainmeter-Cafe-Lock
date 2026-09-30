@@ -188,6 +188,14 @@ int wmain(int argc, wchar_t** argv) {
 				Check("Cancel closes draft without adding it",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('itemModal').open && !document.getElementById('itemsList').textContent.includes('Keep draft')");}));
 				// Renderer-only transport shim: proves UI wiring, not Windows picker/drop provenance.
+				Script(view.Get(),L"document.getElementById('addShelfBtn').click(); document.getElementById('tabName').value='Second shelf tab'; document.getElementById('tabSaveBtn').click();");
+				Check("Add shelf creates and selects its real native files",Wait([&](){return PageTrue(view.Get(),
+					L"!document.getElementById('tabModal').open && document.getElementById('shelfTitle').textContent==='Shelf2' && document.getElementById('tabsNav').textContent.includes('Second shelf tab') && !document.getElementById('removeShelfBtn').disabled");}));
+				Script(view.Get(),L"document.getElementById('removeShelfBtn').click();");
+				Check("Remove shelf requires visible confirmation",PageTrue(view.Get(),L"document.getElementById('confirmModal').open && document.getElementById('shelfTitle').textContent==='Shelf2'"));
+				Script(view.Get(),L"document.getElementById('confirmRemove').click();");
+				Check("confirmed removal returns to the remaining shelf",Wait([&](){return PageTrue(view.Get(),
+					L"!document.getElementById('confirmModal').open && document.getElementById('shelfTitle').textContent==='Shelf1' && document.querySelectorAll('#shelvesNav button').length===1 && !document.getElementById('addItemBtn').disabled");}));
 				Script(view.Get(),L"window.nativeRequest=request; window.uiCalls=[]; request=(op,payload={},files=[])=>new Promise((resolve,reject)=>{uiCalls.push({op,payload,files});window.completeImport=resolve;window.failImport=reject;}); document.getElementById('addItemBtn').click(); document.getElementById('browseLauncher').click();");
 				Check("Browse launcher requests native selection and disables Save",PageTrue(view.Get(),
 					L"uiCalls[0].op==='browseLauncher' && document.getElementById('itemSaveBtn').disabled"));

@@ -1,4 +1,5 @@
 #include "Storage.h"
+#include "ShelfTemplate.h"
 #include <windows.h>
 #include <objbase.h>
 #include <bcrypt.h>
@@ -44,6 +45,17 @@ struct OwnedFile
 	}
 };
 using Pins=std::vector<Handle>;
+std::shared_ptr<OwnedFile> Directory(const std::wstring& path,bool create)
+{
+	if(create)Need(CreateDirectoryW(path.c_str(),nullptr)!=FALSE);
+	auto directory=std::make_shared<OwnedFile>();directory->path=path;directory->keep=!create;
+	directory->handle=Handle(CreateFileW(path.c_str(),FILE_READ_ATTRIBUTES|DELETE,FILE_SHARE_READ|FILE_SHARE_WRITE,
+		nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
+	BY_HANDLE_FILE_INFORMATION info={};
+	Need(directory->handle.value!=INVALID_HANDLE_VALUE && GetFileInformationByHandle(directory->handle.value,&info));
+	Need((info.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) && !(info.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT),Error::Unsupported);
+	return directory;
+}
 std::wstring Canonical(std::wstring root)
 {
 	while(root.size()>3 && root.back()==L'\\')root.pop_back();
@@ -232,10 +244,12 @@ public:
 	std::wstring root, target, source;
 	Snapshot snapshot;
 	Pins parents;
+	std::shared_ptr<OwnedFile> directory, skinIni;
 	std::shared_ptr<OwnedFile> temporary, icon, backup;
 	std::wstring iconName;
 	bool used=false;
 	bool theme=false;
+	EditKind kind=EditKind::SetItem;
 };
 Storage::Storage(std::wstring root):m_Root(std::move(root)){}
 Result<std::vector<ShelfInfo>> Storage::Discover() const
@@ -287,11 +301,32 @@ Result<std::shared_ptr<PreparedSave>> Storage::Prepare(const Snapshot& snapshot,
 {
 	try
 	{
+		if(edit.kind==EditKind::AddShelf)
+		{
+			Need(!image && !edit.label.empty() && KnownTheme(edit.action),Error::InvalidInput);
+			auto name=LuaString(edit.label);Need(name.ok,name.code,L"Choose a supported first tab name.");
+			auto save=std::make_shared<PreparedSave>();save->kind=edit.kind;save->root=Canonical(m_Root);
+			save->parents=Pin(save->root+L"\\@Resources\\Themes");
+			Read(save->root+L"\\@Resources\\Themes\\"+edit.action+L".inc");
+			save->directory=Directory(save->root+L"\\@Resources\\CafeShelfPending-"+GuidName(),true);
+			std::string ini=ShelfTemplate;const auto span=Theme(ini);
+			Need(!span.name.empty());ini.replace(span.begin,span.end-span.begin,"#@#Themes\\"+ThemeName(edit.action)+".inc");
+			save->skinIni=Create(save->directory->path+L"\\Shelf.ini",ini);
+			save->temporary=Create(save->directory->path+L"\\config.lua","ShelfConfig={defaultIcon=\"folder.png\",tabs={{name="+name.value+",items={}}}}\n");
+			return {true,save,Error::None,{}};
+		}
 		auto current=Load(snapshot.shelf.id);
 		Need(current.ok,current.code,L"Reload this shelf before saving.");
 		Need(current.value.version==snapshot.version,Error::Conflict,L"This shelf changed outside the editor. Reload it before saving.");
 		auto save=std::make_shared<PreparedSave>();
 		save->root=Canonical(m_Root); const auto folder=save->root+L"\\"+snapshot.shelf.id;
+		save->kind=edit.kind;
+		if(edit.kind==EditKind::RemoveShelf)
+		{
+			Need(!image,Error::InvalidInput);save->parents=Pin(save->root+L"\\@Resources");
+			save->directory=Directory(folder,false);save->snapshot=snapshot;
+			return {true,save,Error::None,{}};
+		}
 		save->parents=Pin(folder);
 		auto iconPins=Pin(save->root+L"\\@Resources\\Icons");
 		for(auto& pin:iconPins)save->parents.push_back(std::move(pin));
@@ -347,7 +382,33 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 		save->used=true;
 		Need(authorized && authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was saved.");
 		Need(Canonical(m_Root)==save->root,Error::InvalidInput);
+		if(save->kind==EditKind::AddShelf)
+		{
+			Need(authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was saved.");
+			// Preserve the private prepared folder on an ambiguous rename failure.
+			save->skinIni->keep=true;save->skinIni->handle.Close();
+			save->temporary->keep=true;save->temporary->handle.Close();save->directory->keep=true;
+			for(unsigned n=1;n<100000;++n)
+			{
+				const auto id=L"Shelf"+std::to_wstring(n),target=save->root+L"\\"+id;
+				if(RenameHandle(save->directory->handle.value,target,false))
+					return {true,{L"",L"",L"New shelf created. Use Manage / Refresh all to discover and load it.",id},Error::None,{}};
+				if(GetFileAttributesW(target.c_str())==INVALID_FILE_ATTRIBUTES)break;
+			}
+			return {false,{},Error::IoError,L"The shelf could not be published. Its prepared files were retained under @Resources/CafeShelfPending-."};
+		}
 		const auto folder=save->root+L"\\"+save->snapshot.shelf.id;
+		if(save->kind==EditKind::RemoveShelf)
+		{
+			const auto ini=Read(folder+L"\\Shelf.ini");
+			const auto config=Read(folder+(save->snapshot.example?L"\\config.example.lua":L"\\config.lua"));
+			Need(ini.version+"|"+config.version+(save->snapshot.example?"|example":"|config")==save->snapshot.version,
+				Error::Conflict,L"The shelf changed. Reload it before removing it.");
+			Need(authorized(),Error::Locked,L"Maintenance Mode ended. Nothing was removed.");
+			const auto recovery=save->root+L"\\@Resources\\CafeShelfRemoved-"+save->snapshot.shelf.id+L"-"+GuidName();
+			Need(RenameHandle(save->directory->handle.value,recovery,false));
+			return {true,{L"",recovery,L"Shelf removed. Its complete folder is retained in the recovery location.",save->snapshot.shelf.id},Error::None,{}};
+		}
 		// Keep the INI stable, and deny in-place config writes through replacement.
 		// DELETE sharing is needed by ReplaceFile; an outside rename is recovered
 		// in its actual-source backup, not discarded as an older snapshot.
@@ -398,16 +459,16 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 		save->temporary->keep=true; save->temporary->handle.Close();
 		save->backup->keep=true; save->backup->handle.Close();
 		if(save->icon){save->icon->keep=true;save->icon->handle.Close();}
-		return {true,{save->iconName,recovery,warning},Error::None,{}};
+		return {true,{save->iconName,recovery,warning,save->snapshot.shelf.id},Error::None,{}};
 	}
 	catch(const Problem& p)
 	{
-		if(save){save->temporary.reset();save->icon.reset();save->backup.reset();}
+		if(save){save->temporary.reset();save->icon.reset();save->backup.reset();save->skinIni.reset();save->directory.reset();}
 		return Failed<SaveResult>(p);
 	}
 	catch(...)
 	{
-		if(save){save->temporary.reset();save->icon.reset();save->backup.reset();}
+		if(save){save->temporary.reset();save->icon.reset();save->backup.reset();save->skinIni.reset();save->directory.reset();}
 		return Failed<SaveResult>({Error::IoError,L"The save failed; keep the recovery backup and reload the shelf."});
 	}
 }

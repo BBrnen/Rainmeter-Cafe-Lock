@@ -20,7 +20,7 @@ struct Snapshot
 	std::wstring theme;
 	bool example = false;
 };
-struct SaveResult { std::wstring icon, backup, warning; };
+struct SaveResult { std::wstring icon, backup, warning, shelf; };
 class PreparedSave;
 class Storage
 {

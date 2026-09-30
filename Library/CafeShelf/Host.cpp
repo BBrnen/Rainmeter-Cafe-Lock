@@ -208,12 +208,13 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 				const auto result=Storage(options.shelfRoot).Commit(completed->prepared,
 					[this,t=completed->work.ticket](){return Allowed() && control.Allows(t);});
 				reply.ok=result.ok; reply.code=result.code;
-				reply.data=result.ok?Json{{"backup",Utf8(result.value.backup)},{"icon",Utf8(result.value.icon)},{"warning",Utf8(result.value.warning)}}:
+				reply.data=result.ok?Json{{"backup",Utf8(result.value.backup)},{"icon",Utf8(result.value.icon)},{"warning",Utf8(result.value.warning)},{"shelf",Utf8(result.value.shelf)}}:
 					Json{{"message",Utf8(result.message)}};
 				if(result.ok)
 				{
 					icons.clear(); control.CancelDraft(completed->work.ticket);
-					if(options.refreshShelf)options.refreshShelf(Wide(completed->work.request.payload["shelf"].get<std::string>()));
+					if(options.refreshShelf && completed->work.request.payload["edit"]["kind"]!="addShelf")
+						options.refreshShelf(result.value.shelf,completed->work.request.payload["edit"]["kind"]=="removeShelf");
 				}
 			}
 			break;
@@ -273,8 +274,9 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 	void PrepareSave(const Work& work)
 	{
 		const auto& payload=work.request.payload;
+		const bool addingShelf=payload["edit"]["kind"]=="addShelf";
 		const auto found=snapshots.find(Wide(payload["shelf"].get<std::string>()));
-		if(found==snapshots.end() || payload["version"]!=found->second.version)
+		if(!addingShelf && (found==snapshots.end() || payload["version"]!=found->second.version))
 		{
 			busy=false;Reply({work.request.id,false,Error::Stale,{{"message","Reload this shelf before saving."}}});
 			PostMessageW(window,WorkMessage,0,0);return;
@@ -293,10 +295,11 @@ struct Host::State : std::enable_shared_from_this<Host::State>
 		}
 		const auto& data=payload["edit"];
 		const std::map<std::string,EditKind> kinds={{"setItem",EditKind::SetItem},{"addItem",EditKind::AddItem},
-			{"removeItem",EditKind::RemoveItem},{"renameTab",EditKind::RenameTab},{"addTab",EditKind::AddTab},{"removeTab",EditKind::RemoveTab},{"setTheme",EditKind::SetTheme}};
+			{"removeItem",EditKind::RemoveItem},{"renameTab",EditKind::RenameTab},{"addTab",EditKind::AddTab},{"removeTab",EditKind::RemoveTab},{"setTheme",EditKind::SetTheme},
+			{"addShelf",EditKind::AddShelf},{"removeShelf",EditKind::RemoveShelf}};
 		Edit edit{kinds.at(data["kind"].get<std::string>()),data["tab"].get<size_t>(),data["item"].get<size_t>(),
 			Wide(data["label"].get<std::string>()),Wide(data["action"].get<std::string>()),Wide(data["icon"].get<std::string>())};
-		const auto snapshot=found->second; const auto root=options.shelfRoot;
+		const auto snapshot=addingShelf?Snapshot{}:found->second; const auto root=options.shelfRoot;
 		StartJob(work,[root,snapshot,edit,image](Job& task)
 		{
 			const auto prepared=Storage(root).Prepare(snapshot,edit,image.get(),edit.label);
@@ -712,7 +715,7 @@ bool Host::Open()
 void Host::Close() { if (m_State) m_State->Close(); }
 HWND Host::Window() const { return m_State ? m_State->window : nullptr; }
 
-void OpenEditor(HINSTANCE module, const std::wstring& shelfRoot, bool (*isLocked)(), void (*lockNow)(), void (*refreshShelf)(const std::wstring&)) noexcept
+void OpenEditor(HINSTANCE module, const std::wstring& shelfRoot, bool (*isLocked)(), void (*lockNow)(), void (*refreshShelf)(const std::wstring&, bool)) noexcept
 {
 	try
 	{

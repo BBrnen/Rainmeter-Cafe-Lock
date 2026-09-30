@@ -165,7 +165,7 @@ int wmain(int argc,wchar_t** argv) {
 		std::cout<<"ReplaceFile link result="<<linkReplaced<<" error="<<(linkReplaced?0:GetLastError())<<'\n';
 		Check("native replacement does not alter a symbolic target",Read(outside)=="outside owner");
 	}
-	Edit addShelf{static_cast<EditKind>(7),0,0,L"New tab",L"Forest",L""};
+	Edit addShelf{EditKind::AddShelf,0,0,L"New tab",L"Forest",L""};
 	auto newShelf=storage.Prepare({},addShelf,nullptr,L"");
 	Check("new shelf preparation leaves existing shelves unchanged",newShelf.ok && !storage.Load(L"Shelf2").ok);
 	Check("locked creation cannot publish a shelf",!storage.Commit(newShelf.value,[](){return false;}).ok && !storage.Load(L"Shelf2").ok);
@@ -175,7 +175,7 @@ int wmain(int argc,wchar_t** argv) {
 	Check("new shelf uses trusted layout and requested first tab",newSaved.ok && newLoaded.ok &&
 		newLoaded.value.shelf.itemCapacity==18 && newLoaded.value.document.tabs.size()==1 && newLoaded.value.document.tabs[0].name==L"New tab");
 	Write(root+L"\\Shelf2\\owner-notes.txt","keep this custom file");
-	Edit removeShelf{static_cast<EditKind>(8),0,0,L"",L"",L""};
+	Edit removeShelf{EditKind::RemoveShelf,0,0,L"",L"",L""};
 	auto removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
 	Check("locked removal leaves the shelf usable",!storage.Commit(removal.value,[](){return false;}).ok && storage.Load(L"Shelf2").ok);
 	removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
