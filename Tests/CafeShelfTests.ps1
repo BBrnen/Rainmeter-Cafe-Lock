@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'All')]
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'All')]
     [string]$Suite = 'Protocol'
 )
 $ErrorActionPreference = 'Stop'
@@ -9,7 +9,7 @@ $output = Join-Path $repo 'work-package/CafeShelfTests'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
-    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser') } else { @($Suite) }
+    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher') } else { @($Suite) }
     if ($tests -contains 'Selection' -or $tests -contains 'Host' -or $tests -contains 'Browser') {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
@@ -23,6 +23,7 @@ try {
             Selection = 'CafeShelfSelection.cpp'
             Host = 'CafeShelfHostHarness.cpp'
             Browser = 'CafeShelfBrowser.cpp'
+            Launcher = 'CafeShelfLauncher.cpp'
         }[$test]
         $compilerArgs = @(
             '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/D_HAS_EXCEPTIONS=0', '/GR-', '/GL', '/utf-8',
@@ -34,6 +35,14 @@ try {
             "/Fe:CafeShelf$test.exe"
         )
         $arguments = @()
+        $fixtureHashes = @()
+        if ($test -eq 'Launcher') {
+            $fixtures = Join-Path $output ('Launcher-' + [guid]::NewGuid().ToString('N'))
+            & "$repo/Tests/CafeShelfFixtures.ps1" -Directory $fixtures
+            $fixtureHashes = @(Get-ChildItem -LiteralPath $fixtures -File -Recurse | Get-FileHash -Algorithm SHA256)
+            $arguments = @($fixtures)
+            $compilerArgs += @("$repo/Library/CafeShelf/Launcher.cpp", '/link', 'version.lib', 'ole32.lib', 'shell32.lib', 'uuid.lib')
+        }
         if ($test -eq 'Selection') {
             $compilerArgs += @(
                 "/I$sdk/build/native/include", "$repo/Library/CafeShelf/Selection.cpp",
@@ -70,6 +79,14 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "CafeShelf $test compilation failed" }
         & "./CafeShelf$test.exe" @arguments
         if ($LASTEXITCODE -ne 0) { $failed += $test }
+        if ($test -eq 'Launcher') {
+            foreach ($original in $fixtureHashes) {
+                if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw 'Launcher inspection changed a fixture' }
+            }
+            if (Get-ChildItem -LiteralPath $fixtures -Recurse -Filter 'launcher-was-executed.txt') { throw 'Launcher inspection executed a fixture' }
+            if (Test-Path -LiteralPath (Join-Path $output 'launcher-was-executed.txt')) { throw 'Launcher inspection executed a fixture' }
+            Write-Host 'PASS inspection did not change fixture bytes or launch fixture applications'
+        }
     }
     if ($failed.Count -gt 0) { throw "CafeShelf assertions failed: $($failed -join ', ')" }
 } finally {
