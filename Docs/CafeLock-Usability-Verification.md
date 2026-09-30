@@ -46,13 +46,16 @@ actionable native error. Declining it does not unlock or disable launchers.
 
 ## Automated evidence
 
-At `6c91cba6`, [run 36696017649](https://github.com/BBrnen/Rainmeter-Cafe-Lock/actions/runs/36696017649)
-passed 290 editor assertions: protocol 56, host policy 25, controller 19,
-selection 30, lifecycle 14, actual WebView 44, metadata 19, icons 16, config 26,
-storage 41. The complete x64 build, password/policy, standard-user running-app,
+At application revision `87d09a917483f7c2cb713a3204935524e1b67464`,
+[run 36741276257](https://github.com/BBrnen/Rainmeter-Cafe-Lock/actions/runs/36741276257)
+passed 299 editor assertions: protocol 56, host policy 25, controller 19,
+selection 30, lifecycle 14, actual WebView 47, metadata 19, icons 16, config 31,
+storage 42. Twelve executable prerequisite-policy checks and three actual signed
+installer acquisition/reject-cache checks passed. The complete x64 build, password/policy, standard-user running-app,
 pinned ShelfSuite, installer/upgrade/uninstall and artifacts also passed.
-This is the completed editor checkpoint, not validation of later prerequisite
-packaging changes. Final packaging evidence will be recorded after that run.
+The installer artifact contains the offline prerequisite, matching source,
+license notices, exact Runtime provenance and checksums. A later documentation-only
+commit records this evidence; it does not change the application implementation.
 
 Coverage includes real browser Add/Edit/Cancel/Save flows, typed Browse/drop
 wiring, stale response/revocation, XSS-like labels, transparent PNG/ICO conversion,
@@ -61,6 +64,18 @@ concurrent edits/recovery and locked write refusal. The real loaded skin compare
 shortcut arguments, working directory and standard-user token with a Windows
 shell baseline. Tests do not prove every shell extension/icon handler or disk
 failure; partial ReplaceFile failure recovery has not been fault-injected.
+The WebView harness runs as the runner identity. The separate filtered-token
+ShelfSuite test reported the permitted native Runtime error surface; it proves
+guarded routing and launcher compatibility, not that the final editor rendered
+under that standard-user token. Actual standard-user editor acceptance remains
+mandatory on the spare PC/VM.
+
+Independent whole-branch review identified three Important findings. Their
+regressions were observed failing, then passed after the fixes: administrator-only
+per-user Runtime no longer satisfies machine-wide setup; new item/tab/shelf names
+cannot undergo Rainmeter expansion; slow mutations remain tracked until the
+native result and cannot enable retry/Cancel merely because a UI timer expired.
+The fresh complete workflow passed after the fix pass; no second review is implied.
 
 ## Manual standard-user acceptance
 
