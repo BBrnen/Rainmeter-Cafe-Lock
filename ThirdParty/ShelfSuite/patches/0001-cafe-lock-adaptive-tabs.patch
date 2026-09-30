@@ -10,59 +10,30 @@ diff --git a/Shelf Suite/@Resources/ShelfEngine.lua b/Shelf Suite/@Resources/She
 index 8d31580f..968e0460 100644
 --- a/Shelf Suite/@Resources/ShelfEngine.lua
 +++ b/Shelf Suite/@Resources/ShelfEngine.lua
-@@ -85,7 +85,9 @@ function UpdateTabs()
-     local inactiveColor = SKIN:GetVariable("InactiveTabColor")
-     local activeText = SKIN:GetVariable("ActiveTextColor")
-     local inactiveText = SKIN:GetVariable("InactiveTextColor")
+@@ -88 +88,3 @@ function UpdateTabs()
 -    local tabWidth = SKIN:GetVariable("TabWidth")
 +    local tabWidth = tonumber(SKIN:GetVariable("TabWidth")) or 85
 +    local tabHorizontalPadding = tonumber(SKIN:GetVariable("TabHorizontalPadding")) or 12
 +    local widgetBaseWidth = tonumber(SKIN:GetVariable("WidgetBaseWidth")) or 480
-     local tabHeight = SKIN:GetVariable("TabHeight")
-     local cornerRadius = SKIN:GetVariable("CornerRadius")
-     local paddingX = SKIN:GetVariable("PaddingX")
-@@ -95,6 +97,7 @@ function UpdateTabs()
-     local numTabs = #ShelfConfig.tabs
-     local maxTabs = 5  -- Max tab meters defined in INI
- 
+@@ -97,0 +100 @@ function UpdateTabs()
 +    local xPos = tonumber(paddingX) or 0
-     -- Show and configure active tabs
-     for i, tab in ipairs(ShelfConfig.tabs) do
-         if i > maxTabs then break end
-@@ -103,30 +106,38 @@ function UpdateTabs()
-         local color = isActive and activeColor or inactiveColor
-         local textColor = isActive and activeText or inactiveText
- 
+@@ -106,2 +109,3 @@ function UpdateTabs()
 -        -- Calculate X position
 -        local xPos = tonumber(paddingX) + (i - 1) * (tonumber(tabWidth) + tonumber(tabSpacing))
 +        SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "Text", tab.name)
 +        SKIN:Bang("!UpdateMeter", "MeterTab" .. i .. "Text")
 +        local width = math.max(tabWidth, SKIN:GetMeter("MeterTab" .. i .. "Text"):GetW() + (tabHorizontalPadding * 2))
- 
-         -- Update tab background shape and position
-         SKIN:Bang("!SetOption", "MeterTab" .. i .. "Bg", "Shape",
+@@ -111 +115 @@ function UpdateTabs()
 -            "Rectangle 0,0," .. tabWidth .. "," .. tabHeight .. "," ..
 +            "Rectangle 0,0," .. width .. "," .. tabHeight .. "," ..
-             cornerRadius .. "," .. cornerRadius ..
-             " | Fill Color " .. color .. " | StrokeWidth 0")
-         SKIN:Bang("!SetOption", "MeterTab" .. i .. "Bg", "X", tostring(xPos))
-         SKIN:Bang("!SetOption", "MeterTab" .. i .. "Bg", "Y", paddingY)
- 
-         -- Update tab text: name, position, color
+@@ -118 +121,0 @@ function UpdateTabs()
 -        SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "Text", tab.name)
-         SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "FontColor", textColor)
-         SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "X",
+@@ -121 +124 @@ function UpdateTabs()
 -            tostring(xPos + (tonumber(tabWidth) / 2)))
 +            tostring(xPos + (width / 2)))
-         SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "Y",
-             tostring(tonumber(paddingY) + (tonumber(tabHeight) / 2)))
- 
-         -- Show tab meters
-         SKIN:Bang("!ShowMeter", "MeterTab" .. i .. "Bg")
-         SKIN:Bang("!ShowMeter", "MeterTab" .. i .. "Text")
+@@ -127,0 +131 @@ function UpdateTabs()
 +        xPos = xPos + width + (tonumber(tabSpacing) or 0)
-     end
- 
+@@ -129,0 +134,7 @@ function UpdateTabs()
 +    local widgetWidth = math.max(widgetBaseWidth, xPos - (tonumber(tabSpacing) or 0))
 +    SKIN:Bang("!SetVariable", "WidgetWidth", tostring(widgetWidth))
 +    SKIN:Bang("!SetOption", "MeterBackground", "Shape",
@@ -70,62 +41,29 @@ index 8d31580f..968e0460 100644
 +        cornerRadius .. " | Fill Color " .. SKIN:GetVariable("MainBackground") .. " | StrokeWidth 0")
 +    SKIN:Bang("!SetOption", "MeterSettingsGear", "X", tostring(widgetWidth - 28))
 +
-     -- Hide unused tab meters
-     for i = numTabs + 1, maxTabs do
-         SKIN:Bang("!HideMeter", "MeterTab" .. i .. "Bg")
 diff --git a/Shelf Suite/@Resources/Variables.inc b/Shelf Suite/@Resources/Variables.inc
 index a8445b28..0f9e2c4e 100644
 --- a/Shelf Suite/@Resources/Variables.inc
 +++ b/Shelf Suite/@Resources/Variables.inc
-@@ -10,6 +10,7 @@ FontSize_Icon=9
- 
- ; Dimensions
- TabWidth=85
+@@ -12,0 +13 @@ TabWidth=85
 +TabHorizontalPadding=12
- TabHeight=30
- TabSpacing=10
- CornerRadius=6
-@@ -23,6 +24,7 @@ Columns=6
- 
- ; Widget base width (auto-calculated: PaddingX*2 + Columns*IconSpacing)
- WidgetWidth=480
+@@ -25,0 +27 @@ WidgetWidth=480
 +WidgetBaseWidth=480
- 
- ; Animation
- HoverOffset=3
 diff --git a/Shelf Suite/Shelf1/Shelf.ini b/Shelf Suite/Shelf1/Shelf.ini
 index e4ada824..b9121a40 100644
 --- a/Shelf Suite/Shelf1/Shelf.ini
 +++ b/Shelf Suite/Shelf1/Shelf.ini
-@@ -1,6 +1,7 @@
- [Rainmeter]
- Update=1000
- AccurateText=1
+@@ -3,0 +4 @@ AccurateText=1
 +DynamicWindowSize=1
- BackgroundMode=2
- SolidColor=0,0,0,1
- Draggable=1
 diff --git a/Shelf Suite/Shelf2/Shelf.ini b/Shelf Suite/Shelf2/Shelf.ini
 index 89ab36ba..7024f708 100644
 --- a/Shelf Suite/Shelf2/Shelf.ini
 +++ b/Shelf Suite/Shelf2/Shelf.ini
-@@ -1,6 +1,7 @@
- [Rainmeter]
- Update=1000
- AccurateText=1
+@@ -3,0 +4 @@ AccurateText=1
 +DynamicWindowSize=1
- BackgroundMode=2
- SolidColor=0,0,0,1
- Draggable=1
 diff --git a/Shelf Suite/Shelf3/Shelf.ini b/Shelf Suite/Shelf3/Shelf.ini
 index 60976c9f..47a504b3 100644
 --- a/Shelf Suite/Shelf3/Shelf.ini
 +++ b/Shelf Suite/Shelf3/Shelf.ini
-@@ -1,6 +1,7 @@
- [Rainmeter]
- Update=1000
- AccurateText=1
+@@ -3,0 +4 @@ AccurateText=1
 +DynamicWindowSize=1
- BackgroundMode=2
- SolidColor=0,0,0,1
- Draggable=1

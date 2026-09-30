@@ -143,9 +143,9 @@ jobs:
         shell: pwsh
         run: |
           $patch = Join-Path $env:GITHUB_WORKSPACE 'ThirdParty/ShelfSuite/patches/0001-cafe-lock-adaptive-tabs.patch'
-          git -C work-package/ShelfSuite apply --check $patch
+          git -C work-package/ShelfSuite apply --unidiff-zero --check $patch
           if ($LASTEXITCODE -ne 0) { throw 'ShelfSuite adaptive-tab patch no longer applies to the pinned upstream revision' }
-          git -C work-package/ShelfSuite apply $patch
+          git -C work-package/ShelfSuite apply --unidiff-zero $patch
           if ($LASTEXITCODE -ne 0) { throw 'Could not apply ShelfSuite adaptive-tab patch' }
           $actual = @(git -C work-package/ShelfSuite diff --name-only | Sort-Object)
           $expected = @(
