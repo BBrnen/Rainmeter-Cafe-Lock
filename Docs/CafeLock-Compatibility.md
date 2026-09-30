@@ -11,8 +11,11 @@ build, not a claim that every third-party skin or Windows environment is tested.
 - CI checks out that exact source, copies it to a disposable skin profile, and
   loads all three shelves. It creates only a new `Shelf1/config.lua` containing
   harmless test application paths, using ShelfSuite's normal configuration API.
-- The actual stock icon/tab/gear actions and Lua engine run unchanged. File
-  hashes verify that no existing ShelfSuite file was changed by the test.
+- The fixture applies the auditable F1 adaptive-tab patch before Rainmeter
+  starts. It changes only the shared tab-layout Lua, shared variables, and the
+  three supplied shelf INIs; it does not change `config.lua`, icons, themes, or
+  the configurator. File hashes verify that the patched fixture files stay
+  unchanged while the test runs.
 - ShelfSuite is not bundled in the installer or maintained as a separate fork.
 
 `Tests/CafeShelfSuite.ps1` checks launcher clicks, tab content, hover and leave

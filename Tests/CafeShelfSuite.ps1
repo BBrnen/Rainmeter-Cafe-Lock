@@ -275,12 +275,12 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   [void](Read-ShelfState)
   if ((Position $window) -ne '160,160') { throw 'Relocked ShelfSuite moved' }
   foreach ($original in $originals) {
-    if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "Upstream ShelfSuite file changed: $($original.Path)" }
+    if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "Patched ShelfSuite fixture file changed during test: $($original.Path)" }
   }
   foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
     if ((Get-Content -LiteralPath $file.FullName -Raw).Contains($password)) { throw 'Plaintext password in configuration/logs' }
   }
-  Write-Output "PASS: ShelfSuite gear uses native host after password unlock; ordinary HTML still launches non-elevated; Lock Now closes the host and blocks the gear; all upstream files unchanged. Revision: $revision"
+  Write-Output "PASS: ShelfSuite gear uses native host after password unlock; ordinary HTML still launches non-elevated; Lock Now closes the host and blocks the gear; all patched fixture files remained unchanged during the test. Revision: $revision"
 } catch {
   $lastState = Get-ChildItem $root -Filter '*.state' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($lastState) { Write-Output "Last ShelfSuite state: $(Get-Content $lastState.FullName -Raw)" }
