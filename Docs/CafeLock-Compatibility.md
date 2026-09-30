@@ -9,8 +9,9 @@ build, not a claim that every third-party skin or Windows environment is tested.
 - Repository: https://github.com/MartinSantosT/ShelfSuite
 - Version: repository v2.1, revision `d4f186ba0b5c262c7559b80841132f5fd3884f3c`.
 - CI checks out that exact source, copies it to a disposable skin profile, and
-  loads all three shelves. It creates only a new `Shelf1/config.lua` containing
-  harmless test application paths, using ShelfSuite's normal configuration API.
+  loads all three shelves. It creates disposable `Shelf1` through `Shelf3`
+  `config.lua` files containing harmless test application paths and tab labels,
+  using ShelfSuite's normal configuration API.
 - The fixture applies the auditable F1 adaptive-tab patch before Rainmeter
   starts. It changes only the shared tab-layout Lua, shared variables, and the
   three supplied shelf INIs; it does not change `config.lua`, icons, themes, or

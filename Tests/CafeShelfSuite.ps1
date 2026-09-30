@@ -84,6 +84,7 @@ ShelfConfig = {
 "@ | Set-Content "$skins/Shelf Suite/Shelf3/config.lua"
 & "$PSScriptRoot/../CafeShelfNameProbe.exe" "$skins/Shelf Suite/Shelf1/config.lua"
 if($LASTEXITCODE -ne 0){throw 'Native name encoding/rejection probe failed'}
+$configOriginals = @(Get-ChildItem "$skins/Shelf Suite" -Recurse -Filter config.lua -File | Get-FileHash -Algorithm SHA256)
 $ini = Join-Path $root 'Rainmeter.ini'
 @"
 [Rainmeter]
@@ -128,7 +129,7 @@ function Read-ShelfState {
 function Read-ShelfLayout($target) {
   $snapshot = Join-Path $root (([guid]::NewGuid()).ToString() + '.layout')
   $luaPath = $snapshot.Replace('\','/')
-  $lua = "local f=assert(io.open('$luaPath','w')); local function v(n) local m=SKIN:GetMeter(n); return m and (tostring(m:GetX())..','..tostring(m:GetW())) or '' end; f:write(tostring(SKIN:GetW())..'|'..v('MeterSettingsGear')..'|'..v('MeterTab1Bg')..'|'..v('MeterTab1Text')..'|'..v('MeterTab2Bg')..'|'..v('MeterTab2Text')..'|'..v('MeterTab3Bg')..'|'..v('MeterTab3Text')..'|'..v('MeterTab4Bg')..'|'..v('MeterTab5Bg')); f:close()"
+  $lua = "local f=assert(io.open('$luaPath','w')); local function v(n) local m=SKIN:GetMeter(n); return m and (tostring(m:GetX())..','..tostring(m:GetW())) or '' end; f:write(tostring(SKIN:GetW())..'|'..v('MeterSettingsGear')..'|'..v('MeterTab1Bg')..'|'..v('MeterTab1Text')..'|'..v('MeterTab2Bg')..'|'..v('MeterTab2Text')..'|'..v('MeterTab3Bg')..'|'..v('MeterTab3Text')..'|'..v('MeterTab4Bg')..'|'..v('MeterTab4Text')..'|'..v('MeterTab5Bg')..'|'..v('MeterTab5Text')); f:close()"
   [LockNative]::Bang($target,"!CommandMeasure MeasureEngine `"$lua`"")
   Wait-For { (Test-Path $snapshot) -and (Get-Item $snapshot).Length -gt 0 } 'ShelfSuite layout snapshot'
   $parts = (Get-Content $snapshot -Raw).Trim().Split('|')
@@ -136,7 +137,7 @@ function Read-ShelfLayout($target) {
   return [pscustomobject]@{
     Width=[int][double]$parts[0]; Gear=(Pair $parts[1]); Tab1=(Pair $parts[2]); Text1=(Pair $parts[3]);
     Tab2=(Pair $parts[4]); Text2=(Pair $parts[5]); Tab3=(Pair $parts[6]); Text3=(Pair $parts[7]);
-    Tab4=(Pair $parts[8]); Tab5=(Pair $parts[9])
+    Tab4=(Pair $parts[8]); Text4=(Pair $parts[9]); Tab5=(Pair $parts[10]); Text5=(Pair $parts[11])
   }
 }
 function Assert-StandardLaunch($folder) {
@@ -185,16 +186,33 @@ try {
   Write-Output 'PASS: native-saved quotes/HTML-like literal name survives loaded ShelfSuite/Rainmeter layers.'
   $shortLayout = Read-ShelfLayout $shortWindow
   Write-Output "ShelfSuite short layout: width=$($shortLayout.Width), gear=$($shortLayout.Gear.X), tab1=$($shortLayout.Tab1.X),$($shortLayout.Tab1.W), tab2=$($shortLayout.Tab2.X),$($shortLayout.Tab2.W)"
-  if ($shortLayout.Width -ne 480 -or $shortLayout.Tab1.W -ne 85 -or $shortLayout.Tab2.X -lt ($shortLayout.Tab1.X + $shortLayout.Tab1.W + 10) -or $shortLayout.Gear.X -ne ($shortLayout.Width - 35)) {
-    throw 'Short ShelfSuite tabs did not retain the 85 px minimum, spacing, 480 px shelf, and aligned gear'
+  foreach ($index in 1..3) {
+    $tab = $shortLayout."Tab$index"; $text = $shortLayout."Text$index"
+    if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Short ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
+    if ($index -gt 1 -and $tab.X -ne ($shortLayout."Tab$($index - 1)".X + $shortLayout."Tab$($index - 1)".W + 10)) { throw "Short ShelfSuite tab $index did not retain the exact 10 px gap" }
+  }
+  if ($shortLayout.Width -ne 480 -or $shortLayout.Gear.X -ne ($shortLayout.Width - 35)) {
+    throw 'Short ShelfSuite tabs did not retain the 480 px shelf and aligned gear'
   }
   $longLayout = Read-ShelfLayout $longWindow
   Write-Output "ShelfSuite long layout: width=$($longLayout.Width), gear=$($longLayout.Gear.X), tab1=$($longLayout.Tab1.X),$($longLayout.Tab1.W), text1=$($longLayout.Text1.W), tab2=$($longLayout.Tab2.X),$($longLayout.Tab2.W), tab4=$($longLayout.Tab4.X),$($longLayout.Tab4.W), tab5=$($longLayout.Tab5.X),$($longLayout.Tab5.W)"
-  if ($longLayout.Tab1.W -lt ($longLayout.Text1.W + 24) -or $longLayout.Tab2.X -lt ($longLayout.Tab1.X + $longLayout.Tab1.W + 10)) {
-    throw 'Long ShelfSuite tab did not fit SCHOOL/WORK with 12 px side padding and spacing'
+  foreach ($index in 1..5) {
+    $tab = $longLayout."Tab$index"; $text = $longLayout."Text$index"
+    if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Long ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
+    if ($index -gt 1 -and $tab.X -ne ($longLayout."Tab$($index - 1)".X + $longLayout."Tab$($index - 1)".W + 10)) { throw "Long ShelfSuite tab $index did not retain the exact 10 px gap" }
   }
-  if ($longLayout.Width -le 480 -or $longLayout.Tab5.X -lt ($longLayout.Tab4.X + $longLayout.Tab4.W + 10) -or $longLayout.Gear.X -ne ($longLayout.Width - 35)) {
-    throw 'Five long ShelfSuite tabs did not expand the shelf and keep the gear aligned'
+  if ($longLayout.Width -ne [Math]::Max(480, $longLayout.Tab5.X + $longLayout.Tab5.W) -or $longLayout.Gear.X -ne ($longLayout.Width - 35)) {
+    throw 'Five long ShelfSuite tabs did not expand only to the final tab edge and keep the gear aligned'
+  }
+  [LockNative]::Bang($longWindow,"!CommandMeasure MeasureEngine `"ShelfConfig={tabs={{name='ONE'},{name='TWO'},{name='THREE'}}}; UpdateTabs()`"")
+  $resetLayout = Read-ShelfLayout $longWindow
+  if ($resetLayout.Width -ne 480 -or $resetLayout.Gear.X -ne ($resetLayout.Width - 35)) {
+    throw 'ShelfSuite did not return from an expanded long-tab row to its immutable 480 px base width'
+  }
+  foreach ($index in 1..3) {
+    $tab = $resetLayout."Tab$index"; $text = $resetLayout."Text$index"
+    if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Reset ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
+    if ($index -gt 1 -and $tab.X -ne ($resetLayout."Tab$($index - 1)".X + $resetLayout."Tab$($index - 1)".W + 10)) { throw "Reset ShelfSuite tab $index did not retain the exact 10 px gap" }
   }
   Write-Output 'PASS: ShelfSuite tab layout measures text, preserves the short 480 px layout, prevents overlap, and expands only when five long tabs require it.'
   $before = Position $window
@@ -277,10 +295,13 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   foreach ($original in $originals) {
     if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "Patched ShelfSuite fixture file changed during test: $($original.Path)" }
   }
+  foreach ($original in $configOriginals) {
+    if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "ShelfSuite user configuration changed during test: $($original.Path)" }
+  }
   foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
     if ((Get-Content -LiteralPath $file.FullName -Raw).Contains($password)) { throw 'Plaintext password in configuration/logs' }
   }
-  Write-Output "PASS: ShelfSuite gear uses native host after password unlock; ordinary HTML still launches non-elevated; Lock Now closes the host and blocks the gear; all patched fixture files remained unchanged during the test. Revision: $revision"
+  Write-Output "PASS: ShelfSuite gear uses native host after password unlock; ordinary HTML still launches non-elevated; Lock Now closes the host and blocks the gear; all patched fixture files and user configuration remained unchanged during the test. Revision: $revision"
 } catch {
   $lastState = Get-ChildItem $root -Filter '*.state' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($lastState) { Write-Output "Last ShelfSuite state: $(Get-Content $lastState.FullName -Raw)" }
