@@ -129,6 +129,7 @@ function editPayload(kind, item = 0, label = '', action = '', icon = '') {
 async function saveEdit(kind, item = 0, label = '', action = '', icon = '', iconId = 0) {
     if (working) return;
     const shelf = currentShelf(); if (!shelf || shelf.error) return;
+    status('Saving…'); $('itemError').textContent = ''; $('tabError').textContent = '';
     setWorking(true);
     try {
         const result = await request('saveEdits', {shelf:shelf.id, version:shelf.version, iconId, edit:editPayload(kind,item,label,action,icon)});

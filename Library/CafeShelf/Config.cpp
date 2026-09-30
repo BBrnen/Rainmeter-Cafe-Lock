@@ -19,7 +19,7 @@ public:
 	explicit Parser(const std::string& source) : s(source) {}
 	LuaNode Run()
 	{
-		if (s.compare(0,3,"\xEF\xBB\xBF")==0) p=3;
+		Require(s.compare(0,3,"\xEF\xBB\xBF")!=0);
 		Skip(); Require(Identifier()=="ShelfConfig"); Skip(); Require(Take('='));
 		auto root=Value(0); Skip(); Take(';'); Skip(); Require(p==s.size());
 		Require(root.kind==LuaNode::Kind::Table);

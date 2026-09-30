@@ -14,6 +14,9 @@ try {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
     }
+    $sdkHeaders = Join-Path $env:WindowsSdkDir ('Include/' + $env:WindowsSDKVersion.TrimEnd('\') + '/um')
+    Get-ChildItem -LiteralPath $sdkHeaders -Filter '*.h' |
+        Select-String -Pattern 'SHCreateItemFromParsingName' -Context 8, 2 | ForEach-Object { $_.ToString() }
     $failed = @()
     foreach ($test in $tests) {
         $source = @{
@@ -29,7 +32,7 @@ try {
             Storage = 'CafeShelfStorage.cpp'
         }[$test]
         $compilerArgs = @(
-            '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/D_HAS_EXCEPTIONS=0', '/GR-', '/GL', '/utf-8',
+            '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/D_HAS_EXCEPTIONS=0', '/DWIN32_LEAN_AND_MEAN', '/DWINVER=0x0601', '/D_WIN32_WINNT=0x0601', '/D_WIN32_IE=0x0601', '/GR-', '/GL', '/utf-8',
             "$repo/Tests/$source",
             "$repo/Library/CafeShelf/Session.cpp",
             "$repo/Library/CafeShelf/Protocol.cpp",
