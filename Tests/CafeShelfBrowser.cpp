@@ -5,6 +5,7 @@
 #include <iostream>
 #include <functional>
 #include <vector>
+#include <fstream>
 using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
 using namespace CafeShelf;
@@ -108,7 +109,7 @@ std::wstring Script(ICoreWebView2* view, const wchar_t* code) {
 }
 bool PageTrue(ICoreWebView2* view, const wchar_t* code) { return Script(view, code) == L"true"; }
 }
-int main() {
+int wmain(int argc, wchar_t** argv) {
 	if (FAILED(OleInitialize(nullptr))) return 2;
 	// This is an isolated browser-policy test under the CI runner's own identity.
 	// It does not claim filtered-token or real Explorer drop acceptance.
@@ -117,6 +118,7 @@ int main() {
 	auto capture = std::make_shared<Capture>();
 	HostOptions options;
 	options.module = GetModuleHandleW(nullptr);
+	if(argc==2)options.shelfRoot=argv[1];
 	EnumResourceTypesW(options.module, PrintResourceType, 0);
 	for (const auto name : {L"CAFE_SHELF_HTML", L"CAFE_SHELF_JS", L"CAFE_SHELF_CSS"}) {
 		const auto resource = FindResourceW(options.module, name, MAKEINTRESOURCEW(10));
@@ -156,6 +158,28 @@ int main() {
 				L"['browseLauncher','browseFolder','browseIcon'].every(id=>document.getElementById(id))"));
 			Check("shelves tabs preview and status controls are present", PageTrue(view.Get(),
 				L"['shelvesNav','tabsNav','itemsList','iconPreview','status'].every(id=>document.getElementById(id))"));
+			const bool editorReady=Wait([&](){return PageTrue(view.Get(),
+				L"document.querySelector('#itemsList .edit-item')!==null");},5000);
+			Check("installed shelf loads into final interface",editorReady);
+			if(editorReady) {
+				Script(view.Get(),L"document.getElementById('addItemBtn').click();");
+				Check("Add opens launcher fields",PageTrue(view.Get(),L"document.getElementById('itemModal').open"));
+				Script(view.Get(),L"document.getElementById('itemLabel').value='Added fixture'; document.getElementById('itemAction').value='notepad.exe'; document.getElementById('itemIcon').value='file.png'; document.getElementById('itemSaveBtn').click(); document.getElementById('itemSaveBtn').click();");
+				Check("Save waits for native commit and updates list once",Wait([&](){return PageTrue(view.Get(),
+					L"!document.getElementById('itemModal').open && document.getElementById('status').textContent.includes('Saved') && [...document.querySelectorAll('#itemsList .item-label')].filter(x=>x.textContent==='Added fixture').length===1");}));
+				std::ifstream config(options.shelfRoot+L"\\Shelf1\\config.lua",std::ios::binary);
+				const std::string bytes(std::istreambuf_iterator<char>(config),{});
+				Check("UI Save writes real config",bytes.find("Added fixture")!=std::string::npos);
+				Script(view.Get(),L"document.querySelector('#itemsList .edit-item').click(); document.getElementById('itemLabel').value='<img src=x onerror=window.attacked=1>'; document.getElementById('itemSaveBtn').click();");
+				Check("Edit preserves literal HTML without script execution",Wait([&](){return PageTrue(view.Get(),
+					L"!document.getElementById('itemModal').open && document.getElementById('itemsList').textContent.includes('<img src=x onerror=window.attacked=1>') && !window.attacked && !document.querySelector('#itemsList img');");}));
+				Script(view.Get(),L"document.getElementById('addItemBtn').click(); document.getElementById('itemLabel').value='Keep draft'; document.getElementById('itemAction').value='bad.exe\"][!Quit]'; document.getElementById('itemSaveBtn').click();");
+				Check("failed native Save keeps draft open",Wait([&](){return PageTrue(view.Get(),
+					L"document.getElementById('itemModal').open && document.getElementById('itemLabel').value==='Keep draft' && !document.getElementById('itemSaveBtn').disabled && document.getElementById('itemError').textContent.length>0");}));
+				Script(view.Get(),L"document.getElementById('itemCancelBtn').click();");
+				Check("Cancel closes draft without adding it",Wait([&](){return PageTrue(view.Get(),
+					L"!document.getElementById('itemModal').open && !document.getElementById('itemsList').textContent.includes('Keep draft')");}));
+			}
 			ComPtr<ICoreWebView2Settings> settings;
 			ComPtr<ICoreWebView2Settings3> settings3;
 			ComPtr<ICoreWebView2Settings4> settings4;
@@ -175,7 +199,7 @@ int main() {
 			Check("browser management and host objects disabled", !dev && !menus && !objects && !accelerator && !passwords && !autofill);
 			Script(view.Get(), L"window.testReplies=[]; chrome.webview.addEventListener('message', e=>testReplies.push(e.data)); chrome.webview.postMessage(JSON.stringify({id:100,op:'load',payload:{}}));");
 			Check("valid native request gets maintenance-only reply", Wait([&]() {
-				return PageTrue(view.Get(), L"testReplies.some(x=>x.id===100 && x.ok && x.data.mode==='maintenance' && x.data.canSave===false)");
+				return PageTrue(view.Get(), L"testReplies.some(x=>x.id===100 && x.ok && x.data.mode==='maintenance' && Array.isArray(x.data.shelves))");
 			}));
 			Script(view.Get(), L"chrome.webview.postMessage(JSON.stringify({id:101,op:'importDrop',payload:{purpose:'launcher',path:'C:\\\\fake.exe'}})); chrome.webview.postMessage(JSON.stringify({id:101,op:'load',payload:{}}));");
 			Check("page-supplied path rejected before consuming request id", Wait([&]() {

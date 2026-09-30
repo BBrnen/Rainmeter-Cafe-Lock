@@ -78,6 +78,9 @@ try {
                 & rc.exe /nologo "/I$repo/Library" /foCafeShelfEditor.res "$repo/Library/CafeShelf/EditorResources.rc"
                 if ($LASTEXITCODE -ne 0) { throw 'Embedded editor resource compilation failed' }
                 $compilerArgs += 'CafeShelfEditor.res'
+                $fixtures = Join-Path $output ('Browser-' + [guid]::NewGuid().ToString('N'))
+                & "$repo/Tests/CafeShelfStorageFixtures.ps1" -Directory $fixtures
+                $arguments = @($fixtures)
             }
             $compilerArgs += @(
                 '/MT', "/I$sdk/build/native/include",
