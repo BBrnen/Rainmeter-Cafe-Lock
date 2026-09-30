@@ -290,7 +290,15 @@ Result<SaveResult> Storage::Commit(const std::shared_ptr<PreparedSave>& save,con
 		if(save->icon){save->icon->keep=true;save->icon->handle.Close();}
 		return {true,{save->iconName,save->backup->path},Error::None,{}};
 	}
-	catch(const Problem& p){return Failed<SaveResult>(p);}
-	catch(...){return Failed<SaveResult>({Error::IoError,L"The save failed; keep the recovery backup and reload the shelf."});}
+	catch(const Problem& p)
+	{
+		if(save){save->temporary.reset();save->icon.reset();save->backup.reset();}
+		return Failed<SaveResult>(p);
+	}
+	catch(...)
+	{
+		if(save){save->temporary.reset();save->icon.reset();save->backup.reset();}
+		return Failed<SaveResult>({Error::IoError,L"The save failed; keep the recovery backup and reload the shelf."});
+	}
 }
 }
