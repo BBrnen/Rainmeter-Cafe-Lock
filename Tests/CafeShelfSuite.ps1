@@ -204,7 +204,20 @@ try {
   if ($longLayout.Width -ne [Math]::Max(480, $longLayout.Tab5.X + $longLayout.Tab5.W) -or $longLayout.Gear.X -ne ($longLayout.Width - 35)) {
     throw 'Five long ShelfSuite tabs did not expand only to the final tab edge and keep the gear aligned'
   }
-  [LockNative]::Bang($longWindow,"!CommandMeasure MeasureEngine `"ShelfConfig={tabs={{name='ONE'},{name='TWO'},{name='THREE'}}}; UpdateTabs()`"")
+  $longConfigPath = "$skins/Shelf Suite/Shelf3/config.lua"
+  $longConfigBytes = [IO.File]::ReadAllBytes($longConfigPath)
+  @"
+ShelfConfig = {
+  defaultIcon = 'file.png',
+  tabs = {
+    { name = 'ONE', items = {} },
+    { name = 'TWO', items = {} },
+    { name = 'THREE', items = {} }
+  }
+}
+"@ | Set-Content $longConfigPath
+  [LockNative]::Bang($control,'!Refresh "Shelf Suite\Shelf3"')
+  Wait-For { (Read-ShelfLayout $longWindow).Width -eq 480 } 'ShelfSuite long-to-short refresh'
   $resetLayout = Read-ShelfLayout $longWindow
   if ($resetLayout.Width -ne 480 -or $resetLayout.Gear.X -ne ($resetLayout.Width - 35)) {
     throw 'ShelfSuite did not return from an expanded long-tab row to its immutable 480 px base width'
@@ -214,6 +227,8 @@ try {
     if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Reset ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
     if ($index -gt 1 -and $tab.X -ne ($resetLayout."Tab$($index - 1)".X + $resetLayout."Tab$($index - 1)".W + 10)) { throw "Reset ShelfSuite tab $index did not retain the exact 10 px gap" }
   }
+  [IO.File]::WriteAllBytes($longConfigPath, $longConfigBytes)
+  [LockNative]::Bang($control,'!Refresh "Shelf Suite\Shelf3"')
   Write-Output 'PASS: ShelfSuite tab layout measures text, preserves the short 480 px layout, prevents overlap, and expands only when five long tabs require it.'
   $before = Position $window
   # Preserve each stock action, then observe its result in the same UI callback.
