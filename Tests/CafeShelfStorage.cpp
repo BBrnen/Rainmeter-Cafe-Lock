@@ -226,6 +226,8 @@ int wmain(int argc,wchar_t** argv) {
 	auto newLoaded=storage.Load(L"Shelf2");
 	Check("new shelf uses trusted layout and requested first tab",newSaved.ok && newLoaded.ok &&
 		newLoaded.value.shelf.itemCapacity==18 && newLoaded.value.document.tabs.size()==1 && newLoaded.value.document.tabs[0].name==L"New tab");
+	Check("new shelf enables dynamic sizing in its generated Rainmeter section",newSaved.ok &&
+		Read(root+L"\\Shelf2\\Shelf.ini").find("[Rainmeter]\nUpdate=1000\nAccurateText=1\nDynamicWindowSize=1\n")!=std::string::npos);
 	Write(root+L"\\Shelf2\\owner-notes.txt","keep this custom file");
 	Edit removeShelf{EditKind::RemoveShelf,0,0,L"",L"",L""};
 	auto removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
