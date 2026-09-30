@@ -214,6 +214,14 @@ Result<std::string> LuaString(const std::wstring& text)
 	}
 	result+='"'; return {true,result,Error::None,{}};
 }
+Result<std::string> NameString(const std::wstring& text)
+{
+	// The pinned engine feeds names through Lua Bang and MeterString expansion.
+	// Lua quoting alone cannot make these literal without changing that engine.
+	if(text.find_first_of(L"#%[]")!=std::wstring::npos)
+		return {false,{},Error::Unsupported,L"Names cannot contain #, %, [ or ] because ShelfSuite interprets them. Choose a plain display name."};
+	return LuaString(text);
+}
 Result<ShelfDocument> ParseConfig(const std::string& bytes)
 {
 	Result<ShelfDocument> result; result.code=Error::Unsupported;
@@ -246,6 +254,12 @@ Result<ShelfDocument> ParseConfig(const std::string& bytes)
 Result<std::string> ApplyEdit(const ShelfDocument& document,const Edit& edit,size_t tabCapacity,size_t itemCapacity)
 {
 	auto failure=TextFailure();
+	if(edit.kind==EditKind::SetItem || edit.kind==EditKind::AddItem ||
+		edit.kind==EditKind::RenameTab || edit.kind==EditKind::AddTab)
+	{
+		const auto name=NameString(edit.label);
+		if(!name.ok)return name;
+	}
 	try
 	{
 		const auto tabs=Field(document.root,"tabs"); Require(tabs!=nullptr); Array(*tabs);

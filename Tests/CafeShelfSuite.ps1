@@ -21,7 +21,7 @@ foreach ($name in @('AppOne','AppTwo')) {
   New-Item -ItemType Directory "$root/$name" | Out-Null
   Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$root/$name/Probe.exe"
 }
-$shortcutPath = Join-Path $root 'Original Caf� shortcut.lnk'
+$shortcutPath = Join-Path $root 'Original Café shortcut.lnk'
 $workingDirectory = Join-Path $root 'Shortcut working directory'
 New-Item -ItemType Directory -Path $workingDirectory | Out-Null
 $shell = New-Object -ComObject WScript.Shell

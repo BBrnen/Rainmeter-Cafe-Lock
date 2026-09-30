@@ -70,7 +70,7 @@ and ShelfSuite license notices accompany the installed payload and source archiv
 The bundled payload reference is recorded separately from its installer version.
 Evergreen may subsequently update independently through Microsoft's updater.
 
-When Runtime is detected, setup skips it. If missing, interactive setup asks
+When machine-wide Runtime is detected, setup skips it. If missing, interactive setup asks
 whether to install it; No is the default. Silent setup leaves it alone unless
 the administrator explicitly supplies `/INSTALLWEBVIEW2=1`. After an attempted
 installation, setup checks the result and Runtime presence; failure returns 1603
@@ -82,7 +82,8 @@ Opening the editor never downloads/installs a prerequisite. If Runtime is missin
 existing launchers still work and the editor shows an actionable error. Check it
 in the intended standard-user cafe account: a Runtime installed only for a
 different Windows user may not be available there. The Windows installer uses
-Microsoft's documented HKLM/HKCU detection and standalone `/silent /install` flow:
+Microsoft's documented registry views and standalone `/silent /install` flow.
+An administrator-only HKCU Runtime does not satisfy the shared prerequisite:
 https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution.
 
 Final editor acceptance and supported-config limits are recorded in

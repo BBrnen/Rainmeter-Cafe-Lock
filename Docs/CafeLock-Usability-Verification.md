@@ -34,6 +34,7 @@ requests. Restart always starts locked. Existing launcher clicks remain availabl
 
 Executable Lua configs, ambiguous custom layouts/includes, BOM-bearing configs,
 unrepresentable characters under the pinned Lua bridge, unsafe action syntax,
+new names containing `#`, `%`, `[` or `]` (interpreted by the pinned engine),
 reparse points and hardlinked edit targets are rejected without rewriting them.
 Existing unsupported configs can continue running; the editor explains that they
 are read-only. Review the existing config before replacing it yourself.
@@ -96,3 +97,8 @@ Do not remove the owner's shared Runtime to manufacture this environment.
 PR #6 remains draft and unmerged. A final green Windows run, independent code
 review and the manual results above must be recorded before calling it ready to
 merge. This document does not authorize merging, releasing or deployment.
+
+The independent review's minor cache-cleanup finding is deferred: each editor
+lifetime creates a private temporary WebView profile, which can consume disk over
+repeated use. Automatic ownership-checked cleanup after browser-process exit is
+not implemented in this feature. It does not grant new editing authority.

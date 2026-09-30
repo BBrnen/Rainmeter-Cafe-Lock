@@ -207,7 +207,7 @@ int wmain(int argc, wchar_t** argv) {
 				Script(view.Get(),L"window.setTimeout=savedTimer; chrome.webview.postMessage=savedPost; savedPost(heldSaves[0]);");
 				Check("delayed real native result completes the original mutation",Wait([&](){return PageTrue(view.Get(),
 					L"!document.getElementById('tabModal').open && document.getElementById('shelfTitle').textContent==='Shelf2' && document.getElementById('tabsNav').textContent.includes('Delayed shelf') && !document.getElementById('addShelfBtn').disabled");},5000));
-				Script(view.Get(),L"document.getElementById('tabModal').close(); shelfId='Shelf1'; reload();");
+				Script(view.Get(),L"pending.clear(); setWorking(false); document.getElementById('tabModal').close(); shelfId='Shelf1'; reload();");
 				Wait([&](){return PageTrue(view.Get(),L"document.getElementById('shelfTitle').textContent==='Shelf1'");});
 				Script(view.Get(),L"window.nativeRequest=request; window.uiCalls=[]; request=(op,payload={},files=[])=>new Promise((resolve,reject)=>{uiCalls.push({op,payload,files});window.completeImport=resolve;window.failImport=reject;}); document.getElementById('addItemBtn').click(); document.getElementById('browseLauncher').click();");
 				Check("Browse launcher requests native selection and disables Save",PageTrue(view.Get(),

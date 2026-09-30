@@ -7,7 +7,6 @@ Function RuntimeDecision
  Pop $1
  Pop $0
  ${If} $0 == 1
- ${OrIf} $1 == 1
   Push 0
  ${ElseIf} $3 == 1
   Push 1

@@ -304,7 +304,7 @@ Result<std::shared_ptr<PreparedSave>> Storage::Prepare(const Snapshot& snapshot,
 		if(edit.kind==EditKind::AddShelf)
 		{
 			Need(!image && !edit.label.empty() && KnownTheme(edit.action),Error::InvalidInput);
-			auto name=LuaString(edit.label);Need(name.ok,name.code,L"Choose a supported first tab name.");
+			auto name=NameString(edit.label);Need(name.ok,name.code,name.message);
 			auto save=std::make_shared<PreparedSave>();save->kind=edit.kind;save->root=Canonical(m_Root);
 			save->parents=Pin(save->root+L"\\@Resources\\Themes");
 			Read(save->root+L"\\@Resources\\Themes\\"+edit.action+L".inc");

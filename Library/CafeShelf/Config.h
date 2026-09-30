@@ -33,4 +33,5 @@ Result<ShelfDocument> ParseConfig(const std::string& bytes);
 Result<std::string> ApplyEdit(const ShelfDocument& document, const Edit& edit,
 	size_t tabCapacity, size_t itemCapacity);
 Result<std::string> LuaString(const std::wstring& text);
+Result<std::string> NameString(const std::wstring& text);
 }

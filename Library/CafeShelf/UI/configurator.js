@@ -7,7 +7,10 @@ const pending = new Map();
 function request(op, payload = {}, files = []) {
     return new Promise((resolve, reject) => {
         const id = ++nextRequest;
-        const timer = setTimeout(() => {
+        // A save may still commit natively after a renderer timer expires.
+        // Keep mutations tracked and controls disabled until a definitive reply.
+        // Lock Now/window close still revoke pending native work.
+        const timer = op === 'saveEdits' ? null : setTimeout(() => {
             pending.delete(id);
             reject(new Error('The operation is taking too long. Reload the shelf before trying another save.'));
         }, 60000);

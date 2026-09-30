@@ -52,7 +52,8 @@ FunctionEnd
 !macroend
 
 Function DetectRuntime
- ; Microsoft documents HKLM's 32-bit view and HKCU for Evergreen detection.
+ ; Shared startup requires machine-wide availability. An elevated admin's HKCU
+ ; registration is tracked separately and never satisfies the shared prerequisite.
  StrCpy $RuntimePresent 0
  StrCpy $RuntimeUserPresent 0
  SetRegView 32
