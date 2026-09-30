@@ -90,19 +90,23 @@ int wmain(int argc,wchar_t** argv) {
 	int gates=0; const auto raced=Read(hard)+"\n-- final boundary edit\n";
 	auto race=storage.Commit(prepared.value,[&](){if(++gates==2)Write(hard,raced);return true;});
 	Check("final boundary edit is retained or blocked before replacement",(!race.ok && Read(hard)==raced) || (race.ok && Read(race.value.backup)==raced));
-	// Probe the documented Win10 POSIX replacement primitive before depending on it.
-	const auto probeOld=root+L"\\rename-old.txt",probeNew=root+L"\\rename-new.txt";
-	Write(probeOld,"old");Write(probeNew,"new");
-	HANDLE oldHandle=CreateFileW(probeOld.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
-	HANDLE newHandle=CreateFileW(probeNew.c_str(),GENERIC_READ|DELETE,FILE_SHARE_READ,nullptr,OPEN_EXISTING,0,nullptr);
-	struct RenameEx { DWORD flags; HANDLE root; DWORD bytes; WCHAR name[1]; };
-	std::vector<BYTE> renameBytes(sizeof(RenameEx)+probeOld.size()*sizeof(wchar_t),0);
-	auto rename=reinterpret_cast<RenameEx*>(renameBytes.data());rename->flags=3;rename->bytes=static_cast<DWORD>(probeOld.size()*sizeof(wchar_t));
-	memcpy(rename->name,probeOld.data(),rename->bytes);
-	BOOL renamed=SetFileInformationByHandle(newHandle,static_cast<FILE_INFO_BY_HANDLE_CLASS>(22),rename,static_cast<DWORD>(renameBytes.size()));
-	std::cout<<"POSIX replacement with exclusive validation handle: "<<renamed<<" error="<<(renamed?0:GetLastError())<<'\\n';
-	if(newHandle!=INVALID_HANDLE_VALUE)CloseHandle(newHandle);
-	if(oldHandle!=INVALID_HANDLE_VALUE)CloseHandle(oldHandle);
+	// Compare native replacement behavior in isolated files, never user data.
+	const auto replaceOld=root+L"\\replace-old.txt",replaceNew=root+L"\\replace-new.txt",replaceBackup=root+L"\\replace-backup.txt";
+	Write(replaceOld,"actual outside edit");Write(replaceNew,"prepared edit");
+	HANDLE held=CreateFileW(replaceOld.c_str(),GENERIC_READ|DELETE,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+	BOOL replaced=ReplaceFileW(replaceOld.c_str(),replaceNew.c_str(),replaceBackup.c_str(),0,nullptr,nullptr);
+	Check("native replacement preserves actual replaced bytes with read lease",held!=INVALID_HANDLE_VALUE && replaced &&
+		Read(replaceOld)=="prepared edit" && Read(replaceBackup)=="actual outside edit");
+	if(held!=INVALID_HANDLE_VALUE)CloseHandle(held);
+	const auto outside=root+L"\\replace-outside.txt",link=root+L"\\replace-link.txt",linkNew=root+L"\\replace-link-new.txt",linkBackup=root+L"\\replace-link-backup.txt";
+	Write(outside,"outside owner");Write(linkNew,"replacement");
+	const BOOL linkMade=CreateSymbolicLinkW(link.c_str(),outside.c_str(),0);
+	Check("symbolic replacement fixture created",linkMade!=FALSE);
+	if(linkMade) {
+		const BOOL linkReplaced=ReplaceFileW(link.c_str(),linkNew.c_str(),linkBackup.c_str(),0,nullptr,nullptr);
+		std::cout<<"ReplaceFile link result="<<linkReplaced<<" error="<<(linkReplaced?0:GetLastError())<<'\n';
+		Check("native replacement does not alter a symbolic target",Read(outside)=="outside owner");
+	}
 	CoUninitialize();
 	std::cout<<checks<<" storage checks, "<<failures<<" failures\n";
 	return failures?1:0;
