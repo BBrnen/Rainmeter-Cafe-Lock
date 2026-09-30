@@ -8,7 +8,14 @@ namespace {
 int checks=0, failures=0;
 void Check(const char* name,bool ok) { ++checks; if(!ok)++failures; std::cout<<(ok?"PASS ":"FAIL ")<<name<<'\n'; }
 std::string Read(const std::wstring& path) {
-	std::ifstream in(path,std::ios::binary); return std::string(std::istreambuf_iterator<char>(in),{});
+	HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+	if(file==INVALID_HANDLE_VALUE)return {};
+	LARGE_INTEGER size={}; std::string bytes; DWORD read=0;
+	if(GetFileSizeEx(file,&size) && size.QuadPart>=0 && size.QuadPart<=4*1024*1024) {
+		bytes.resize(static_cast<size_t>(size.QuadPart));
+		if(!ReadFile(file,bytes.empty()?nullptr:&bytes[0],static_cast<DWORD>(bytes.size()),&read,nullptr) || read!=bytes.size())bytes.clear();
+	}
+	CloseHandle(file);return bytes;
 }
 void Write(const std::wstring& path,const std::string& bytes) {
 	std::ofstream out(path,std::ios::binary); out.write(bytes.data(),static_cast<std::streamsize>(bytes.size()));

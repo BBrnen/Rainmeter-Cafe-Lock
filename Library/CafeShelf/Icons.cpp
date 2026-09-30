@@ -164,7 +164,8 @@ Result<PngImage> Prepare(const SelectedFile& source, bool launcher)
 Result<PngImage> PrepareIcon(const SelectedFile& source) { return Prepare(source, false); }
 Result<PngImage> PrepareLauncherIcon(const LauncherDraft& launcher)
 {
-	return Prepare({launcher.iconSource, false}, true);
+	const auto attributes=GetFileAttributesW(launcher.iconSource.c_str());
+	return Prepare({launcher.iconSource, attributes!=INVALID_FILE_ATTRIBUTES && (attributes&FILE_ATTRIBUTE_DIRECTORY)!=0}, true);
 }
 std::wstring IconBaseName(const std::wstring& name)
 {

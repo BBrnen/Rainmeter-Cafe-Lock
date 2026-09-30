@@ -90,7 +90,7 @@ function openItem(index = null) {
     if (working) return;
     ++draftGeneration;
     const item = index === null ? {label:'', action:'', icon:currentShelf()?.defaultIcon || 'file.png'} : currentShelf().tabs[tabIndex].items[index];
-    draft = {index, iconId:0};
+    draft = {index, iconId:0, existingIcon:item.icon};
     $('itemModalHeader').textContent = index === null ? 'Add launcher' : 'Edit launcher';
     $('itemLabel').value = item.label; $('itemAction').value = item.action; $('itemIcon').value = item.icon;
     $('itemError').textContent = ''; $('iconStatus').textContent = 'Keep an existing icon, or import a custom one.';
@@ -116,7 +116,7 @@ async function importItem(op, purpose, files = []) {
             $('iconPreview').src = result.preview; $('iconPreview').hidden = false;
             $('iconStatus').textContent = 'Ready to import. A unique PNG filename will be chosen when you save.';
         } else if (result.warning) {
-            draft.iconId = 0; $('iconPreview').hidden = true;
+            draft.iconId = 0; $('itemIcon').value = draft.existingIcon; $('iconPreview').hidden = true;
             $('iconStatus').textContent = result.warning + ' The existing/default icon will be kept.';
         }
     } catch (error) {
@@ -152,7 +152,7 @@ $('addItemBtn').addEventListener('click', () => openItem());
 $('browseLauncher').addEventListener('click', () => importItem('browseLauncher', 'launcher'));
 $('browseFolder').addEventListener('click', () => importItem('browseFolder', 'launcher'));
 $('browseIcon').addEventListener('click', () => importItem('browseIcon', 'icon'));
-$('itemIcon').addEventListener('input', () => { if (draft) draft.iconId = 0; $('iconPreview').hidden = true; $('iconStatus').textContent = 'Using the named existing icon.'; });
+$('itemIcon').addEventListener('input', () => { if (draft) { draft.iconId = 0; draft.existingIcon = $('itemIcon').value; } $('iconPreview').hidden = true; $('iconStatus').textContent = 'Using the named existing icon.'; });
 $('itemCancelBtn').addEventListener('click', cancelItem);
 $('itemModal').addEventListener('cancel', event => { event.preventDefault(); cancelItem(); });
 $('itemForm').addEventListener('submit', event => {
