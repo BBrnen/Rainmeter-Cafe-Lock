@@ -26,6 +26,20 @@ bool Wait(const std::function<bool()>& predicate, DWORD timeout = 15000) {
 	} while (GetTickCount64() < end);
 	return predicate();
 }
+BOOL CALLBACK PrintResourceName(HMODULE, LPCWSTR type, LPWSTR name, LONG_PTR) {
+	std::wcout << L"Embedded resource type=";
+	if (IS_INTRESOURCE(type)) std::wcout << reinterpret_cast<ULONG_PTR>(type);
+	else std::wcout << type;
+	std::wcout << L" name=";
+	if (IS_INTRESOURCE(name)) std::wcout << reinterpret_cast<ULONG_PTR>(name);
+	else std::wcout << name;
+	std::wcout << std::endl;
+	return TRUE;
+}
+BOOL CALLBACK PrintResourceType(HMODULE module, LPWSTR type, LONG_PTR) {
+	EnumResourceNamesW(module, type, PrintResourceName, 0);
+	return TRUE;
+}
 struct Capture {
 	ComPtr<ICoreWebView2> view;
 	bool loaded = false;
@@ -103,6 +117,11 @@ int main() {
 	auto capture = std::make_shared<Capture>();
 	HostOptions options;
 	options.module = GetModuleHandleW(nullptr);
+	EnumResourceTypesW(options.module, PrintResourceType, 0);
+	for (const auto name : {L"CAFE_SHELF_HTML", L"CAFE_SHELF_JS", L"CAFE_SHELF_CSS"}) {
+		const auto resource = FindResourceW(options.module, name, MAKEINTRESOURCEW(10));
+		Check("trusted RCDATA resource embedded", resource && SizeofResource(options.module, resource) > 0);
+	}
 	options.isLocked = [&locked]() { return locked; };
 	options.lockNow = [&locked]() { locked = true; };
 	options.reportError = [capture](const wchar_t* message) {
@@ -166,13 +185,41 @@ int main() {
 			// again for Lock Now, with a larger ID, not an out-of-date UI request.
 			Script(view.Get(), L"window.networkBlocked=false; fetch('https://example.invalid/no-network').then(()=>{},()=>{networkBlocked=true;});");
 			Check("CSP blocks page network requests", Wait([&]() { return PageTrue(view.Get(), L"networkBlocked"); }));
-			Script(view.Get(), L"window.popupResult=window.open('https://example.invalid');");
-			Check("popup does not replace trusted host", IsWindow(host.Window()) &&
-				PageTrue(view.Get(), L"location.href==='https://cafe-shelf.invalid/index.html'"));
-			Script(view.Get(), L"chrome.webview.postMessage(JSON.stringify({id:104,op:'lockNow',payload:{}}));");
+			auto popupHandled = std::make_shared<bool>(false);
+			EventRegistrationToken popupToken = {};
+			view->add_NewWindowRequested(Callback<ICoreWebView2NewWindowRequestedEventHandler>(
+				[popupHandled](ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs* args) -> HRESULT {
+					BOOL handled = FALSE; args->get_Handled(&handled);
+					*popupHandled = handled != FALSE; return S_OK;
+				}).Get(), &popupToken);
+			Script(view.Get(), L"window.open('https://example.invalid');");
+			Check("popup is consumed by host without external launch", Wait([&]() { return *popupHandled; }));
+			view->remove_NewWindowRequested(popupToken);
+			Script(view.Get(), L"window.fabricatedRejected=false; try { chrome.webview.postMessageWithAdditionalObjects(JSON.stringify({id:104,op:'importDrop',payload:{purpose:'launcher'}}),[new File(['fake'],'fake.lnk')]); } catch(e) { fabricatedRejected=true; } chrome.webview.postMessage(JSON.stringify({id:105,op:'load',payload:{}}));");
+			Check("fabricated browser File grants no native selection", Wait([&]() {
+				return PageTrue(view.Get(), L"testReplies.some(x=>x.id===105) && !testReplies.some(x=>x.id===104 && x.ok) && (fabricatedRejected || testReplies.some(x=>x.id===104 && !x.ok))");
+			}));
+			Script(view.Get(), L"chrome.webview.postMessage(JSON.stringify({id:106,op:'lockNow',payload:{}}));");
 			Check("real page lock revokes host and invokes native lock", Wait([&]() { return locked && !host.Window(); }));
 			Check("locked host cannot reopen", !host.Open() && !host.Window());
 			view.Reset();
+			for (const bool frame : {false, true}) {
+				locked = false;
+				capture->view.Reset();
+				capture->loaded = false; capture->failed = false; capture->errors = 0;
+				const bool opened = host.Open() && Wait([&]() {
+					return capture->loaded || capture->failed || capture->errors != 0;
+				}, 45000) && capture->loaded && capture->view && host.Window();
+				Check(frame ? "new host for frame rejection" : "new host for navigation rejection", opened);
+				if (!opened) break;
+				if (frame)
+					Script(capture->view.Get(), L"document.body.appendChild(document.createElement('iframe'));");
+				else
+					capture->view->Navigate(L"https://example.invalid/untrusted");
+				Check(frame ? "frame creation revokes and closes editor" : "unexpected navigation revokes and closes editor",
+					Wait([&]() { return !host.Window() && capture->errors != 0; }));
+				host.Close();
+			}
 		}
 		host.Close();
 	}
