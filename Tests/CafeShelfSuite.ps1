@@ -21,9 +21,22 @@ foreach ($name in @('AppOne','AppTwo')) {
   New-Item -ItemType Directory "$root/$name" | Out-Null
   Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$root/$name/Probe.exe"
 }
+$shortcutPath = Join-Path $root 'Original Café shortcut.lnk'
+$workingDirectory = Join-Path $root 'Shortcut working directory'
+New-Item -ItemType Directory -Path $workingDirectory | Out-Null
+$shell = New-Object -ComObject WScript.Shell
+$link = $shell.CreateShortcut($shortcutPath)
+$link.TargetPath = Join-Path $root 'AppOne\Probe.exe'
+$link.Arguments = '"argument with spaces" /fixture'
+$link.WorkingDirectory = $workingDirectory
+$link.IconLocation = (Join-Path $env:WINDIR 'System32/shell32.dll') + ',3'
+$link.Save()
+[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link)
+[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+$shortcutHash = (Get-FileHash -LiteralPath $shortcutPath -Algorithm SHA256).Hash
 # These are new user configuration files in the disposable profile, not edits
 # to the upstream skin, engine, themes, icons, or configurator.
-$appOne = "$root/AppOne/Probe.exe".Replace('\','/')
+$appOne = $shortcutPath.Replace('\','/')
 $appTwo = "$root/AppTwo/Probe.exe".Replace('\','/')
 @"
 ShelfConfig = {
@@ -92,6 +105,15 @@ function Assert-GearBlocked {
 }
 $process = $null
 try {
+  # Compare the meter's actual shell dispatch to opening the same shortcut.
+  Start-Process -FilePath $shortcutPath
+  Assert-StandardLaunch 'AppOne'
+  $shortcutBaseline = Get-Content -LiteralPath "$root/AppOne/launch-details.txt" -Raw
+  if (-not $shortcutBaseline.Contains("cwd=$workingDirectory") -or -not $shortcutBaseline.Contains('"argument with spaces" /fixture')) {
+    throw 'Windows shortcut baseline did not preserve fixture working directory and arguments'
+  }
+  Remove-Item -LiteralPath "$root/AppOne/launched.txt"
+  Remove-Item -LiteralPath "$root/AppOne/launch-details.txt"
   '<html>Association control</html>' | Set-Content "$root/control.html"
   Start-Process "$root/control.html"
   Assert-StandardLaunch 'HtmlHandler'
@@ -132,6 +154,13 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   if ((Get-Content "$root/hover.event" -Raw) -ne '62') { throw 'Stock hover action did not raise the icon' }
   Click-Shelf 55 85
   Assert-StandardLaunch 'AppOne'
+  if ((Get-Content -LiteralPath "$root/AppOne/launch-details.txt" -Raw) -ne $shortcutBaseline) {
+    throw 'ShelfSuite shortcut launch differs from opening the same shortcut in Windows'
+  }
+  if ((Get-FileHash -LiteralPath $shortcutPath -Algorithm SHA256).Hash -ne $shortcutHash) {
+    throw 'Shortcut launch changed original shortcut bytes'
+  }
+  Write-Output 'PASS: real locked ShelfSuite meter preserves original shortcut arguments, working directory and standard-user token.'
   [void][LockNative]::SetCursorPos(900,700)
   [void][LockNative]::Send($window,0x2A3,0,0)
   Wait-For { Test-Path "$root/leave.event" } 'stock mouse-leave callback'
