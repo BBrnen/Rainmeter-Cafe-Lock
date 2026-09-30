@@ -38,6 +38,28 @@ END
 '@)
 Push-Location $Directory
 try {
+    Add-Type -AssemblyName System.Drawing
+    $bitmap = [Drawing.Bitmap]::new(2, 1, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try {
+        $bitmap.SetPixel(0, 0, [Drawing.Color]::FromArgb(0, 0, 0, 0))
+        $bitmap.SetPixel(1, 0, [Drawing.Color]::FromArgb(128, 10, 20, 30))
+        $bitmap.Save((Join-Path $Directory 'Transparent.png'), [Drawing.Imaging.ImageFormat]::Png)
+    } finally { $bitmap.Dispose() }
+    $pngBytes = [IO.File]::ReadAllBytes((Join-Path $Directory 'Transparent.png'))
+    $icoStream = [IO.MemoryStream]::new()
+    $writer = [IO.BinaryWriter]::new($icoStream)
+    try {
+        $writer.Write([uint16]0); $writer.Write([uint16]1); $writer.Write([uint16]1)
+        $writer.Write([byte]2); $writer.Write([byte]1); $writer.Write([byte]0); $writer.Write([byte]0)
+        $writer.Write([uint16]1); $writer.Write([uint16]32)
+        $writer.Write([uint32]$pngBytes.Length); $writer.Write([uint32]22)
+        $writer.Write($pngBytes)
+        [IO.File]::WriteAllBytes((Join-Path $Directory 'Transparent.ico'), $icoStream.ToArray())
+    } finally { $writer.Dispose(); $icoStream.Dispose() }
+    [IO.File]::WriteAllText((Join-Path $Directory 'Corrupt.png'), 'not an image')
+    $oversized = [IO.File]::Create((Join-Path $Directory 'Oversized.png'))
+    try { $oversized.SetLength(32MB + 1) } finally { $oversized.Dispose() }
+    Add-Content -LiteralPath $version -Value '2 ICON "Transparent.ico"'
     & rc.exe /nologo /foFixture.res $version
     if ($LASTEXITCODE -ne 0) { throw 'Launcher fixture resource compilation failed' }
     & cl.exe /nologo /EHsc /W4 /WX /DNOMINMAX /utf-8 $source Fixture.res '/Fe:Versioned application.exe' /link /SUBSYSTEM:WINDOWS
@@ -45,12 +67,12 @@ try {
     & cl.exe /nologo /EHsc /W4 /WX /DNOMINMAX /utf-8 $source '/Fe:Without version.exe' /link /SUBSYSTEM:WINDOWS
     if ($LASTEXITCODE -ne 0) { throw 'Unversioned fixture compilation failed' }
     $shell = New-Object -ComObject WScript.Shell
-    foreach ($name in @('Original shortcut.lnk', 'Unavailable target.lnk')) {
+    foreach ($name in @('Original shortcut.lnk', 'Unavailable target.lnk', 'Target icon.lnk')) {
         $shortcut = $shell.CreateShortcut((Join-Path $Directory $name))
-        $shortcut.TargetPath = if ($name -eq 'Original shortcut.lnk') { Join-Path $Directory 'Versioned application.exe' } else { Join-Path $Directory 'Missing.exe' }
+        $shortcut.TargetPath = if ($name -ne 'Unavailable target.lnk') { Join-Path $Directory 'Versioned application.exe' } else { Join-Path $Directory 'Missing.exe' }
         $shortcut.Arguments = '"argument with spaces" /fixture'
         $shortcut.WorkingDirectory = Join-Path $Directory 'Folder with spaces'
-        $shortcut.IconLocation = (Join-Path $env:WINDIR 'System32/shell32.dll') + ',3'
+        if ($name -ne 'Target icon.lnk') { $shortcut.IconLocation = (Join-Path $env:WINDIR 'System32/shell32.dll') + ',3' }
         $shortcut.Save()
         [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
     }
