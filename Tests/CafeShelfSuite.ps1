@@ -36,7 +36,20 @@ $link.Save()
 $shortcutHash = (Get-FileHash -LiteralPath $shortcutPath -Algorithm SHA256).Hash
 # These are new user configuration files in the disposable profile, not edits
 # to the upstream skin, engine, themes, icons, or configurator.
-$appOne = $shortcutPath.Replace('\','/')
+# The pinned ASCII ShelfEngine runs through Rainmeter's legacy-codepage Lua
+# bridge. Encode non-ASCII literal bytes explicitly; writing UTF-8 verbatim
+# changes the path on that bridge. Storage must perform this same round-trip
+# check and reject characters the active bridge cannot represent.
+Add-Type @'
+using System.Runtime.InteropServices;
+public static class ShelfFixtureEncoding {
+ [DllImport("kernel32.dll")] public static extern uint GetACP();
+}
+'@
+[Text.Encoding]::RegisterProvider([Text.CodePagesEncodingProvider]::Instance)
+$legacyEncoding = [Text.Encoding]::GetEncoding([int][ShelfFixtureEncoding]::GetACP(), [Text.EncoderFallback]::ExceptionFallback, [Text.DecoderFallback]::ExceptionFallback)
+$pathBytes = $legacyEncoding.GetBytes($shortcutPath.Replace('\','/'))
+$appOne = -join ($pathBytes | ForEach-Object { if ($_ -ge 128) { '\' + $_.ToString('D3') } else { [char]$_ } })
 $appTwo = "$root/AppTwo/Probe.exe".Replace('\','/')
 @"
 ShelfConfig = {
