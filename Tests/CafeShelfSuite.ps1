@@ -60,6 +60,28 @@ ShelfConfig = {
   }
 }
 "@ | Set-Content "$skins/Shelf Suite/Shelf1/config.lua"
+@"
+ShelfConfig = {
+  defaultIcon = 'file.png',
+  tabs = {
+    { name = 'ONLINE', items = {} },
+    { name = 'OFFLINE', items = {} },
+    { name = 'INTERNET', items = {} }
+  }
+}
+"@ | Set-Content "$skins/Shelf Suite/Shelf2/config.lua"
+@"
+ShelfConfig = {
+  defaultIcon = 'file.png',
+  tabs = {
+    { name = 'SCHOOL/WORK', items = {} },
+    { name = 'SCHOOL/WORK 2', items = {} },
+    { name = 'SCHOOL/WORK 3', items = {} },
+    { name = 'SCHOOL/WORK 4', items = {} },
+    { name = 'SCHOOL/WORK 5', items = {} }
+  }
+}
+"@ | Set-Content "$skins/Shelf Suite/Shelf3/config.lua"
 & "$PSScriptRoot/../CafeShelfNameProbe.exe" "$skins/Shelf Suite/Shelf1/config.lua"
 if($LASTEXITCODE -ne 0){throw 'Native name encoding/rejection probe failed'}
 $ini = Join-Path $root 'Rainmeter.ini'
@@ -103,6 +125,20 @@ function Read-ShelfState {
   Wait-For { (Test-Path $snapshot) -and (Get-Item $snapshot).Length -gt 0 } 'stock Lua engine snapshot'
   return (Get-Content $snapshot -Raw)
 }
+function Read-ShelfLayout($target) {
+  $snapshot = Join-Path $root (([guid]::NewGuid()).ToString() + '.layout')
+  $luaPath = $snapshot.Replace('\','/')
+  $lua = "local f=assert(io.open('$luaPath','w')); local function v(n) local m=SKIN:GetMeter(n); return m and (tostring(m:GetX())..','..tostring(m:GetW())) or '' end; f:write(tostring(SKIN:GetW())..'|'..v('MeterSettingsGear')..'|'..v('MeterTab1Bg')..'|'..v('MeterTab1Text')..'|'..v('MeterTab2Bg')..'|'..v('MeterTab2Text')..'|'..v('MeterTab3Bg')..'|'..v('MeterTab3Text')..'|'..v('MeterTab4Bg')..'|'..v('MeterTab5Bg')); f:close()"
+  [LockNative]::Bang($target,"!CommandMeasure MeasureEngine `"$lua`")
+  Wait-For { (Test-Path $snapshot) -and (Get-Item $snapshot).Length -gt 0 } 'ShelfSuite layout snapshot'
+  $parts = (Get-Content $snapshot -Raw).Trim().Split('|')
+  function Pair($value) { $pair=$value.Split(','); return [pscustomobject]@{ X=[int][double]$pair[0]; W=[int][double]$pair[1] } }
+  return [pscustomobject]@{
+    Width=[int][double]$parts[0]; Gear=(Pair $parts[1]); Tab1=(Pair $parts[2]); Text1=(Pair $parts[3]);
+    Tab2=(Pair $parts[4]); Text2=(Pair $parts[5]); Tab3=(Pair $parts[6]); Text3=(Pair $parts[7]);
+    Tab4=(Pair $parts[8]); Tab5=(Pair $parts[9])
+  }
+}
 function Assert-StandardLaunch($folder) {
   $probeFolder = if ($folder -eq 'HtmlHandler') { $HtmlProbeDirectory } else { "$root/$folder" }
   Wait-For { Test-Path "$probeFolder/launched.txt" } "$folder launch"
@@ -141,10 +177,24 @@ try {
     Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',$title) -ne [IntPtr]::Zero } "stock Shelf$shelf startup"
   }
   $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf1\Shelf.ini")
+  $shortWindow = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf2\Shelf.ini")
+  $longWindow = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf3\Shelf.ini")
   $tray = [LockNative]::FindWindow('RainmeterTrayClass',$null)
   $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
   Wait-For { (Read-ShelfState) -eq "1|65|O'Brien <Cafe>" } 'initial literal name through real stock meters'
   Write-Output 'PASS: native-saved quotes/HTML-like literal name survives loaded ShelfSuite/Rainmeter layers.'
+  $shortLayout = Read-ShelfLayout $shortWindow
+  if ($shortLayout.Width -ne 480 -or $shortLayout.Tab1.W -ne 85 -or $shortLayout.Tab2.X -lt ($shortLayout.Tab1.X + $shortLayout.Tab1.W + 10) -or $shortLayout.Gear.X -ne ($shortLayout.Width - 28)) {
+    throw 'Short ShelfSuite tabs did not retain the 85 px minimum, spacing, 480 px shelf, and aligned gear'
+  }
+  $longLayout = Read-ShelfLayout $longWindow
+  if ($longLayout.Tab1.W -lt ($longLayout.Text1.W + 24) -or $longLayout.Tab2.X -lt ($longLayout.Tab1.X + $longLayout.Tab1.W + 10)) {
+    throw 'Long ShelfSuite tab did not fit SCHOOL/WORK with 12 px side padding and spacing'
+  }
+  if ($longLayout.Width -le 480 -or $longLayout.Tab5.X -lt ($longLayout.Tab4.X + $longLayout.Tab4.W + 10) -or $longLayout.Gear.X -ne ($longLayout.Width - 28)) {
+    throw 'Five long ShelfSuite tabs did not expand the shelf and keep the gear aligned'
+  }
+  Write-Output 'PASS: ShelfSuite tab layout measures text, preserves the short 480 px layout, prevents overlap, and expands only when five long tabs require it.'
   $before = Position $window
   # Preserve each stock action, then observe its result in the same UI callback.
   # On a hosted desktop WM_MOUSELEAVE can arrive before an external snapshot.
