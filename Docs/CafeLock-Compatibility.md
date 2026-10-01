@@ -58,6 +58,24 @@ not before a user signs in. Each Windows account has its own password/profile.
 
 ## Checks requiring a disposable Windows desktop
 
+## Native F1 compatibility coverage
+
+The Maintenance-only Settings action is tested with Rainmeter running and stock
+ShelfSuite skins loaded under a standard-user token. Tests cover Locked Mode and
+forged-command denial, exact preview/file list, Cancel, Lock Now before/during
+application, busy-target refusal, additional content-recognized shelves, unchanged
+loaded windows/positions, successful update, already-compatible no-op and customized
+file refusal. Native recovery tests cover interruption after moving an original,
+authorization revocation, competing files, verified backup leases, permissions and
+attributes. No product operation reads user `config.lua` or unrelated skin data.
+
+Installer tests compare exact bundled bytes, deny standard-user writes/deletion,
+and preserve disposable shelf, profile, icon, theme and backup sentinels through
+install, upgrade and uninstall. See `CafeLock-Deployment.md` for owner confirmation,
+normal reload and manual recovery. Hosted tests do not replace spare-PC acceptance.
+
+## Checks requiring a disposable Windows desktop
+
 The automated runtime test sends Windows end-session queries for shutdown,
 restart and sign-out, checks cancellation keeps Rainmeter alive, and checks a
 confirmed sign-out message exits even while locked. It does **not** perform an

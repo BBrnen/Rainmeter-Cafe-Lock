@@ -20,7 +20,7 @@ function Assert-F1Bundle {
  }
  $actual = @(Get-ChildItem -LiteralPath $bundle -Recurse -Force -File)
  if ($actual.Count -ne $expected.Count) { throw 'F1 bundle contains unexpected files' }
- Write-Output 'PASS F1BundleInstalledAndProtected: exact runtime allowlist and source bytes.'
+ Write-Host 'PASS F1BundleInstalledAndProtected: exact runtime allowlist and source bytes.'
  return $bundle
 }
 if ($Standard) {

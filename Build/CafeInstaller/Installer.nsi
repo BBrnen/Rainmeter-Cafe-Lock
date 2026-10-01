@@ -25,7 +25,7 @@ VIAddVersionKey "LegalCopyright" "Rainmeter contributors; GPL v2 or later"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\..\LICENSE"
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TEXT "Rainmeter Cafe Lock is installed. Open it from the Start menu in the cafe Windows account, then use Unlock / Enter Maintenance Mode to create the password before customer use. It will start locked when any Windows user signs in. Setup does not launch Rainmeter as administrator."
+!define MUI_FINISHPAGE_TEXT "Rainmeter Cafe Lock is installed. Open it from the Start menu in the cafe Windows account, then use Unlock / Enter Maintenance Mode to create the password before customer use. Manage > Settings offers Apply ShelfSuite F1 compatibility after unlock. Review and confirm it separately; Setup never modifies ShelfSuite. Rainmeter starts locked at sign-in and is not launched as administrator."
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES

@@ -20,7 +20,8 @@ NSIS 3.11. GitHub Actions performs those steps and tests the result.
    ShelfSuite using normal Rainmeter controls. Its settings gear opens the integrated
    editor with Add/Edit, Browse/drop and automatic icons. ShelfSuite is not bundled;
    the pinned installed skin engine and assets are retained. The F1 adaptive-tab
-   compatibility update is documented separately and is not installed by Setup.
+   compatibility action is available under Manage > Settings after unlock. Setup
+   installs only its protected verification data; it never updates your shelves.
 5. Select Lock Now. Setup enables automatic startup for all Windows users via the
    shared Startup folder. It starts locked after sign-in, not before the login
    screen, and runs as that user. Configure the password in each cafe account before
@@ -49,6 +50,43 @@ Protecting that boundary would require a different privileged service/broker or 
 restricted Windows deployment; it is not silently introduced by this installer.
 
 ## Updating and removing
+
+### Optional ShelfSuite F1 compatibility
+
+Use this once in the normal cafe Windows account after installing Cafe Lock.
+Unlock with the existing password, open Manage > Settings, and select
+**Apply ShelfSuite F1 compatibility**. It uses Rainmeter's configured skin path
+and the existing `Shelf Suite\@Resources` directory. Review the installation,
+complete file list and proposed backup location. Cancel makes no changes;
+choose Apply only when the preview is correct.
+
+Only exact approved ShelfSuite v2.1/F1 shared files and immediate `ShelfN\Shelf.ini`
+variants are accepted. Additional shelves are recognized by contents, not number.
+An unknown/customized, missing, linked or busy target refuses the entire update.
+Do not edit files to make them look recognized. An already-compatible installation
+requires no writes or new backup. No `config.lua`, icons, themes, launcher data,
+passwords or saved positions are read or modified by this action.
+
+Before changes, the action creates and verifies a timestamped sibling
+`Shelf Suite-F1-Backup-...` folder containing only changed original files and
+recovery instructions. Keep the whole folder. After success, reload the affected
+skins in Maintenance Mode or exit and restart Rainmeter normally. Restart is
+always locked. No automatic reload or skin repositioning occurs.
+
+If a failure reports **Recovered after failure**, originals were restored; keep
+the backup and resolve the reported cause before trying again. **Manual recovery
+required** means the operation is incomplete: do not reload affected shelves.
+Lock Now stops further writes, including automatic recovery. Close Rainmeter
+normally after authenticating if necessary. Read `RESTORE.txt` and `PHASE.txt`
+in the retained backup; phase entries record intentions, so check actual paths.
+Preserve any competing/unexpected target separately. Restore only the listed
+original files from the verified backup to their matching installation paths;
+never overwrite an unexpected file without keeping it. Holding originals and
+staged outputs are retained for inspection. Ask for help if the paths or hashes
+do not match the record. Recovery never involves `config.lua` or other data.
+
+The operation runs without elevation, scripts, downloads or security-policy
+changes. F2 grid snapping and the experimental PowerShell updater are not included.
 
 Close Cafe Lock using its normal Exit control in Maintenance before running Setup
 again. Setup refuses updates/uninstall while its Rainmeter.dll is in use; it does
