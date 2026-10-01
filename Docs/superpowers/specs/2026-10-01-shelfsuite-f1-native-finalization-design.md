@@ -1,7 +1,7 @@
 # ShelfSuite F1 native finalization design
 
-Date: 2026-10-01  
-Branch: `feature/f1-installer-finalization`  
+Date: 2026-10-01
+Branch: `feature/f1-installer-finalization`
 Stable F1 baseline: `v4.5.26.3894-cafe-lock-f1.0` at
 `c6ce82ab7c2e9f901b01c712a0efd22bdee6d5c9`
 
