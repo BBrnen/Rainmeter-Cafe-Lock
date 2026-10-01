@@ -157,8 +157,11 @@ try {
     if (((Target-Hashes) -join '|') -ne ($before -join '|') -or @(Backups).Count) { throw 'Busy target produced writes.' }
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
+    $beforeApplyPosition = Position $window
+    Write-Output ("F1 fixture before apply position: " + $beforeApplyPosition)
     Task-Click $preview 1001
     Result-Dialog 'Updated'
+    Write-Output ("F1 fixture after apply: alive=" + [LockNative]::IsWindow($window) + "; position=" + (Position $window))
     if (@(Backups).Count -ne 1) { throw 'Native update did not create one verified backup.' }
     if (-not [LockNative]::IsWindow($window) -or (Position $window) -ne $position) { throw 'Native F1 update changed the loaded skin or its position.' }
     $after = Target-Hashes
