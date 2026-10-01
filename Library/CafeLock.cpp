@@ -244,7 +244,7 @@ void CafeLock::OpenShelfSuiteF1Compatibility(HWND owner)
 	dialog.dwCommonButtons = TDCBF_CANCEL_BUTTON;
 	dialog.pszWindowTitle = L"ShelfSuite F1 compatibility"; dialog.pszMainInstruction = L"Review the ShelfSuite F1 update";
 	dialog.pszContent = content.c_str(); dialog.pszExpandedInformation = details.c_str();
-	dialog.pszExpandedControlText = L"Show file list"; dialog.pszCollapsedControlText = L"Hide file list";
+	dialog.pszExpandedControlText = L"Hide file list"; dialog.pszCollapsedControlText = L"Show file list";
 	dialog.cButtons = _countof(buttons); dialog.pButtons = buttons; dialog.nDefaultButton = IDCANCEL;
 	dialog.pfCallback = F1PreviewCallback;
 	int selected = IDCANCEL;
