@@ -9,9 +9,21 @@ $f1 = 'c6ce82ab7c2e9f901b01c712a0efd22bdee6d5c9'
 $patchRel = 'ThirdParty/ShelfSuite/patches/0001-cafe-lock-adaptive-tabs.patch'
 $utf8 = New-Object Text.UTF8Encoding($false, $true)
 function Git-Checked([string]$Directory, [string[]]$Arguments) {
-    $result = @(& git -C $Directory @Arguments)
-    if ($LASTEXITCODE -ne 0) { throw 'Source verification/build Git operation failed.' }
-    return $result
+    $start=New-Object Diagnostics.ProcessStartInfo
+    $start.FileName=@(Get-Command git.exe -CommandType Application -ErrorAction Stop)[0].Source
+    $parts=@('-C',$Directory)+$Arguments
+    $start.Arguments=(@($parts | ForEach-Object { '"'+[regex]::Replace([regex]::Replace($_,'(\\*)"','$1$1\"'),'(\\+)$','$1$1')+'"' }) -join ' ')
+    $start.UseShellExecute=$false; $start.CreateNoWindow=$true
+    $start.RedirectStandardOutput=$true; $start.RedirectStandardError=$true
+    $process=New-Object Diagnostics.Process; $process.StartInfo=$start
+    try {
+        if (-not $process.Start()) { throw 'Could not start native Git.' }
+        $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
+        $process.WaitForExit(); $text=$stdout.Result; $detail=$stderr.Result
+        if ($process.ExitCode -ne 0) { throw ('Source verification/build Git operation failed (exit '+$process.ExitCode+'): '+$detail.Trim()) }
+        if (-not $text) { return @() }
+        return @($text.TrimEnd("`r","`n") -split '\r?\n')
+    } finally { $process.Dispose() }
 }
 function Digest([byte[]]$Bytes) {
     $sha = [Security.Cryptography.SHA256]::Create()

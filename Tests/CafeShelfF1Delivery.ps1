@@ -95,6 +95,13 @@ if ($Suite -in @('Package', 'All')) {
         Assert-Refused { Read-F1Package $corrupt } 'duplicate package file'
     }
     Test-Case 'FreshOutputRequired' { Assert-Refused { & $builder -UpstreamDirectory $upstream -OutputDirectory "$scratch/build" } 'existing output' }
+    Test-Case 'BuilderUsesRealGitDespiteSessionShadowing' {
+        function global:git { return 'not the native git executable' }
+        try {
+            & $builder -UpstreamDirectory $upstream -OutputDirectory "$scratch/native-git-build" | Out-Null
+            Assert-True (Test-Path "$scratch/native-git-build/package/manifest.json") 'builder did not use real native Git'
+        } finally { Remove-Item Function:/git -ErrorAction SilentlyContinue }
+    }
     Test-Case 'CRLFCheckoutPatchBuildsEquivalentPayload' {
         $clone=Join-Path $scratch 'windows-checkout'
         git clone --quiet --shared --no-checkout $repo $clone
