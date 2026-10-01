@@ -16,6 +16,8 @@ void PromptForManagement(Bang bang);
 void LockNow();
 void Shutdown();
 void ShowLockedTrayMenu(HWND owner);
+void OpenShelfSuiteF1Compatibility(HWND owner);
+inline bool AllowsF1Compatibility() { return !IsLocked(); }
 
 inline bool AllowsBang(Bang bang)
 {

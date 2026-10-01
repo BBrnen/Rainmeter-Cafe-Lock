@@ -2418,9 +2418,10 @@ void DialogManage::TabSettings::Create(HWND owner)
 			buttonWidth + 30, 196, buttonWidth + 20, 14,
 			WS_VISIBLE | WS_TABSTOP, 0),
 		CT_GROUPBOX(Id_CafeGroup, 0, 0, 222, 478, 37, WS_VISIBLE, 0),
-		CT_LABEL(Id_CafeStatus, 0, 6, 237, 230, 12, WS_VISIBLE, 0),
-		CT_BUTTON(Id_CafeChange, 0, 265, 236, 120, 16, WS_VISIBLE | WS_TABSTOP, 0),
-		CT_BUTTON(Id_CafeLock, 0, 391, 236, 80, 16, WS_VISIBLE | WS_TABSTOP, 0)
+		CT_LABEL(Id_CafeStatus, 0, 6, 237, 130, 12, WS_VISIBLE, 0),
+		CT_BUTTON(Id_CafeF1, 0, 142, 236, 176, 16, WS_TABSTOP, 0),
+		CT_BUTTON(Id_CafeChange, 0, 324, 236, 92, 16, WS_VISIBLE | WS_TABSTOP, 0),
+		CT_BUTTON(Id_CafeLock, 0, 422, 236, 50, 16, WS_VISIBLE | WS_TABSTOP, 0)
 	};
 
 	CreateControls(s_Controls, _countof(s_Controls), c_Dialog->m_Font, GetString);
@@ -2432,6 +2433,9 @@ void DialogManage::TabSettings::Initialize()
 	SetWindowText(GetControl(Id_CafeStatus), CafeLock::IsLocked() ? L"Mode: Locked" : L"Mode: Maintenance (editing unlocked)");
 	SetWindowText(GetControl(Id_CafeChange), L"Change password...");
 	SetWindowText(GetControl(Id_CafeLock), L"Lock Now");
+	SetWindowText(GetControl(Id_CafeF1), L"Apply ShelfSuite F1 compatibility");
+	ShowWindow(GetControl(Id_CafeF1), CafeLock::AllowsF1Compatibility() ? SW_SHOW : SW_HIDE);
+	EnableWindow(GetControl(Id_CafeF1), CafeLock::AllowsF1Compatibility());
 	UpdateLanguageStatus();
 
 	// Scan for languages
@@ -2548,6 +2552,9 @@ INT_PTR DialogManage::TabSettings::OnCommand(WPARAM wParam, LPARAM lParam)
 
 	switch (LOWORD(wParam))
 	{
+	case Id_CafeF1:
+		if (CafeLock::AllowsF1Compatibility()) CafeLock::OpenShelfSuiteF1Compatibility(m_Window);
+		return TRUE;
 	case Id_CafeChange:
 		CafeLock::ChangePassword();
 		return TRUE;

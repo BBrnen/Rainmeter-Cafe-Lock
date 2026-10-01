@@ -208,7 +208,8 @@ private:
 			Id_CafeGroup,
 			Id_CafeStatus,
 			Id_CafeChange,
-			Id_CafeLock
+			Id_CafeLock,
+			Id_CafeF1
 		};
 
 		TabSettings();
