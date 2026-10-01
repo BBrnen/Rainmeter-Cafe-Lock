@@ -1,0 +1,730 @@
+{
+  "SchemaVersion": 1,
+  "UpstreamRevision": "d4f186ba0b5c262c7559b80841132f5fd3884f3c",
+  "F1Revision": "c6ce82ab7c2e9f901b01c712a0efd22bdee6d5c9",
+  "PatchSha256": "6c4913af57f1b8542d287c72b08e3ee840275cae51b7f7a96df40707891956e9",
+  "Files": [
+    {
+      "Path": "payload/@Resources/ShelfEngine.lua",
+      "Hash": "7b80083824accaa836df7a54e5a39b35f45012496970fe9fd85aaac16c3630c1"
+    },
+    {
+      "Path": "payload/@Resources/Variables.inc",
+      "Hash": "63d325f6d9d0e8028011ce89837dc9e24b1d23befad8887fb379ac0ece706577"
+    }
+  ],
+  "Recognition": [
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/ShelfEngine.lua",
+      "InputHash": "0c01ecc24c01fc35bcac2988dd5ff4b6ca3c54a427a574a061138df5588f7efe",
+      "OutputHash": "7b80083824accaa836df7a54e5a39b35f45012496970fe9fd85aaac16c3630c1",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/ShelfEngine.lua"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/ShelfEngine.lua",
+      "InputHash": "7b80083824accaa836df7a54e5a39b35f45012496970fe9fd85aaac16c3630c1",
+      "OutputHash": "7b80083824accaa836df7a54e5a39b35f45012496970fe9fd85aaac16c3630c1",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/ShelfEngine.lua"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/ShelfEngine.lua",
+      "InputHash": "83765b298acbfd7c271196e9382a55b83172e7909c8611095e521767299901b3",
+      "OutputHash": "47e5f1b48b1cadc8011f34cefbc092cfbf60e7a3cc1101ac9cdd9df25e011fe7",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/ShelfEngine.lua"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/ShelfEngine.lua",
+      "InputHash": "47e5f1b48b1cadc8011f34cefbc092cfbf60e7a3cc1101ac9cdd9df25e011fe7",
+      "OutputHash": "47e5f1b48b1cadc8011f34cefbc092cfbf60e7a3cc1101ac9cdd9df25e011fe7",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/ShelfEngine.lua"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/Variables.inc",
+      "InputHash": "a0710065eebd98779a5660aa5d90610474207f6ea3471558b0ee20dcc62fdbbc",
+      "OutputHash": "63d325f6d9d0e8028011ce89837dc9e24b1d23befad8887fb379ac0ece706577",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/Variables.inc"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/Variables.inc",
+      "InputHash": "63d325f6d9d0e8028011ce89837dc9e24b1d23befad8887fb379ac0ece706577",
+      "OutputHash": "63d325f6d9d0e8028011ce89837dc9e24b1d23befad8887fb379ac0ece706577",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/Variables.inc"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/Variables.inc",
+      "InputHash": "8cf197d0d031351416860f68bd69c2f31d413a04b2f1311d321377cb593c36c5",
+      "OutputHash": "59889aec0cca52ccba772a67f08d65bfcabfb1fb53c12686789fe1057a13b788",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/Variables.inc"
+    },
+    {
+      "Kind": "Shared",
+      "Path": "@Resources/Variables.inc",
+      "InputHash": "59889aec0cca52ccba772a67f08d65bfcabfb1fb53c12686789fe1057a13b788",
+      "OutputHash": "59889aec0cca52ccba772a67f08d65bfcabfb1fb53c12686789fe1057a13b788",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM",
+      "Payload": "payload/@Resources/Variables.inc"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "46aa7ed6843bd99a237e88cbc7098c0eb2cdbc84983e6a1cbd5564918defb9f8",
+      "OutputHash": "b2a728afeb6f4058d3c4a415f82407159fac12ba7644c37df3fe6abe37c54f5f",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "b2a728afeb6f4058d3c4a415f82407159fac12ba7644c37df3fe6abe37c54f5f",
+      "OutputHash": "b2a728afeb6f4058d3c4a415f82407159fac12ba7644c37df3fe6abe37c54f5f",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "aff8792843f17daf633a24efc9bb57d5a94a66ca4e235f43ac55461d64f787fc",
+      "OutputHash": "ba1e9b6e3181f9dfaa17d5588bbc245ae8cadbba6aa0fc7452376a913a0c54b5",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "ba1e9b6e3181f9dfaa17d5588bbc245ae8cadbba6aa0fc7452376a913a0c54b5",
+      "OutputHash": "ba1e9b6e3181f9dfaa17d5588bbc245ae8cadbba6aa0fc7452376a913a0c54b5",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "029033968bbed42b68f5bf76b4ed1ef5601f2d80a25178debcf939b7a7ec5103",
+      "OutputHash": "310d42f8d05f454796a633d52eb09051eb49e82d49ba7a054b65ebc7997e9997",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "310d42f8d05f454796a633d52eb09051eb49e82d49ba7a054b65ebc7997e9997",
+      "OutputHash": "310d42f8d05f454796a633d52eb09051eb49e82d49ba7a054b65ebc7997e9997",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "3e08555c42b8849e38e2935587d650be874657e554d563fa19e53060d21180d0",
+      "OutputHash": "aa4b1a0c340bd2fc018c85df751f7c274e78979ce0760b96b989b34347742093",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "aa4b1a0c340bd2fc018c85df751f7c274e78979ce0760b96b989b34347742093",
+      "OutputHash": "aa4b1a0c340bd2fc018c85df751f7c274e78979ce0760b96b989b34347742093",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "6f47eac41e96d8130173e43dbaae41500fb0c0f45797d2526bd8d878bfff4a5a",
+      "OutputHash": "343d32bceb4d288287053fa59520662bd29e3b148c2a968c13571a5eec96b05d",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "343d32bceb4d288287053fa59520662bd29e3b148c2a968c13571a5eec96b05d",
+      "OutputHash": "343d32bceb4d288287053fa59520662bd29e3b148c2a968c13571a5eec96b05d",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "4f5864854f1911ef974df961de11403b2d7ba7cca292b681622ab70ea38a8a05",
+      "OutputHash": "0ab62cf33c1cfe1771192e7707aeaf13332d1a7dd7f2c657d1f4d6d335b4e92d",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "0ab62cf33c1cfe1771192e7707aeaf13332d1a7dd7f2c657d1f4d6d335b4e92d",
+      "OutputHash": "0ab62cf33c1cfe1771192e7707aeaf13332d1a7dd7f2c657d1f4d6d335b4e92d",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "4124fa50004de271da76bba702b1aa4b08a4dea999efa2ad80965ed36f7cc345",
+      "OutputHash": "40131f7c61372d1427ef6db243bc5efd2f5e80beac368813555e47064a02b6bd",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "40131f7c61372d1427ef6db243bc5efd2f5e80beac368813555e47064a02b6bd",
+      "OutputHash": "40131f7c61372d1427ef6db243bc5efd2f5e80beac368813555e47064a02b6bd",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "6a26a9fab050d5d29dee2a1f531841279c0e58ba7f8396e6b00a4e0be48123a6",
+      "OutputHash": "c7b06953ddde9b03f6663b7503029eb3d99e969a135e13ebeed0cf184f4a479e",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock1",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "c7b06953ddde9b03f6663b7503029eb3d99e969a135e13ebeed0cf184f4a479e",
+      "OutputHash": "c7b06953ddde9b03f6663b7503029eb3d99e969a135e13ebeed0cf184f4a479e",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "49d07eaacf4c42c77f096d387952d4777ac370d96f9eb05961b5aba2049f1d09",
+      "OutputHash": "e3ba3ea50c93d4f122ca363375f5903f0a07bd9d69d38b94c60f95d9731cb43c",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "e3ba3ea50c93d4f122ca363375f5903f0a07bd9d69d38b94c60f95d9731cb43c",
+      "OutputHash": "e3ba3ea50c93d4f122ca363375f5903f0a07bd9d69d38b94c60f95d9731cb43c",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "9d82a54bea97995378b53f5887f4fd27c0b4911c1c4da8911f0d87b86e3e0fb7",
+      "OutputHash": "0a20a364c58a5adc498a55195f7aaed54c52ade76410ab2e2c6e98d4fd31f222",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "0a20a364c58a5adc498a55195f7aaed54c52ade76410ab2e2c6e98d4fd31f222",
+      "OutputHash": "0a20a364c58a5adc498a55195f7aaed54c52ade76410ab2e2c6e98d4fd31f222",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "556c45c6a7b52ab1a8e15ec349d21366d3d1c431ccef9762d72cb256c43b4d43",
+      "OutputHash": "d64dbc331d8674a99c69f9160e2f4756be582568ec74a5001806d84b4ae9adc8",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "d64dbc331d8674a99c69f9160e2f4756be582568ec74a5001806d84b4ae9adc8",
+      "OutputHash": "d64dbc331d8674a99c69f9160e2f4756be582568ec74a5001806d84b4ae9adc8",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "a77c3bb67dae523f9764af777c7590f2a5ecd1b4f356653d0f2a207b3c8a50ce",
+      "OutputHash": "a0cb99d002561c5e4cd03a70c346f205563a4bb03b68079506cd3d05794f642d",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "a0cb99d002561c5e4cd03a70c346f205563a4bb03b68079506cd3d05794f642d",
+      "OutputHash": "a0cb99d002561c5e4cd03a70c346f205563a4bb03b68079506cd3d05794f642d",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "ab1ab378e9cd872ca1e7b041259c5337a0d472561d39153df8c49824453d8dbb",
+      "OutputHash": "cba9bae371e82d949df9658afa41d086734964cb93fc821a4b55bc376f45c08d",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "cba9bae371e82d949df9658afa41d086734964cb93fc821a4b55bc376f45c08d",
+      "OutputHash": "cba9bae371e82d949df9658afa41d086734964cb93fc821a4b55bc376f45c08d",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "0c8d2d7e007149c469958adde7d38b46d74e9d4d3cb9b5195703721ff2c66cf6",
+      "OutputHash": "6385335780d508b06ab0b4440353df2fd42bccaa0560ad872eb959d6c35c9588",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "6385335780d508b06ab0b4440353df2fd42bccaa0560ad872eb959d6c35c9588",
+      "OutputHash": "6385335780d508b06ab0b4440353df2fd42bccaa0560ad872eb959d6c35c9588",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "87fbd0527d4c31d13c9c085c81ee82ec2a33565d796eca24dda945d9edda216c",
+      "OutputHash": "9f52750d2d88974bdbaca13b11d8e3e634503593adb6e1a9c4e5813f05bba3d4",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "9f52750d2d88974bdbaca13b11d8e3e634503593adb6e1a9c4e5813f05bba3d4",
+      "OutputHash": "9f52750d2d88974bdbaca13b11d8e3e634503593adb6e1a9c4e5813f05bba3d4",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "8402f6087eae3ab9ef45552150bac12f82aa071307374de8accee577a9db5e79",
+      "OutputHash": "0cdf1862513c3d9162b30d2051241f1ca38cc61bb650e9a4ab4ed650a0a6eed1",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock2",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "0cdf1862513c3d9162b30d2051241f1ca38cc61bb650e9a4ab4ed650a0a6eed1",
+      "OutputHash": "0cdf1862513c3d9162b30d2051241f1ca38cc61bb650e9a4ab4ed650a0a6eed1",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "a47e3a9886b51ae39bcd9d3d7875579643cdf4c97f6f80df6d585575a57b9837",
+      "OutputHash": "b7a255f6314287d366e78027211e5d27607a8a9d8dbcd1034f5c0d434b18a2d9",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "b7a255f6314287d366e78027211e5d27607a8a9d8dbcd1034f5c0d434b18a2d9",
+      "OutputHash": "b7a255f6314287d366e78027211e5d27607a8a9d8dbcd1034f5c0d434b18a2d9",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "cd2a0de8eface899aa693a2625e3583e4b281fc2287832fd58258c1e94ad5b9f",
+      "OutputHash": "caf7cd2006cb62c9adb4433a617fd2724a29fe1eeb439602d77a0789b81cfb97",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "caf7cd2006cb62c9adb4433a617fd2724a29fe1eeb439602d77a0789b81cfb97",
+      "OutputHash": "caf7cd2006cb62c9adb4433a617fd2724a29fe1eeb439602d77a0789b81cfb97",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "84abe4d3ea713627ed498ddfd029b6858dcbb80d2191cd35e3525603e55e6e2e",
+      "OutputHash": "2ec84ce8de25ee4b516e12475a3e15af0587133c849550f071cdc2d6bc44f5e7",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "2ec84ce8de25ee4b516e12475a3e15af0587133c849550f071cdc2d6bc44f5e7",
+      "OutputHash": "2ec84ce8de25ee4b516e12475a3e15af0587133c849550f071cdc2d6bc44f5e7",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "e90ab1de8fea864235dd88a871e2c3b8469434ef68e1f0845120e07e472a6954",
+      "OutputHash": "9a63204bcb33104ee5ab74fc0f4d4430281e13376fa6f057bb7fa0ffe1c7355a",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "9a63204bcb33104ee5ab74fc0f4d4430281e13376fa6f057bb7fa0ffe1c7355a",
+      "OutputHash": "9a63204bcb33104ee5ab74fc0f4d4430281e13376fa6f057bb7fa0ffe1c7355a",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "32c164e78eac99049a32aa0bc451c18982f5d8cb0df8a3ac03fdc5c0abccead9",
+      "OutputHash": "f3023bd0d1ea14cea2fcbb30d9b798a0676a8b57ecc3db94f65df868f92a17f5",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "f3023bd0d1ea14cea2fcbb30d9b798a0676a8b57ecc3db94f65df868f92a17f5",
+      "OutputHash": "f3023bd0d1ea14cea2fcbb30d9b798a0676a8b57ecc3db94f65df868f92a17f5",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "497eb0ca93f08eefd34697533c73529ec01e85456dba4705bfbac88f9d161866",
+      "OutputHash": "c7906fc34dfa5d8ddc59639f593f51e40fb4e655bc45048b27c51dcb318b4e05",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "c7906fc34dfa5d8ddc59639f593f51e40fb4e655bc45048b27c51dcb318b4e05",
+      "OutputHash": "c7906fc34dfa5d8ddc59639f593f51e40fb4e655bc45048b27c51dcb318b4e05",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "9b6e0cd1677c8eaad0152d99e667e6bb0ceec969de57978241a73ba2fae33bc8",
+      "OutputHash": "0be7eedf3db4dfb59b5a2578d66350414f6baa99cefc27380012dc32b0969cf3",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "0be7eedf3db4dfb59b5a2578d66350414f6baa99cefc27380012dc32b0969cf3",
+      "OutputHash": "0be7eedf3db4dfb59b5a2578d66350414f6baa99cefc27380012dc32b0969cf3",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "50a719cb15c0577eaa0861909c172503cff8d73f3d9ad0170aca177f617f7282",
+      "OutputHash": "be85f1126fb3276fbe0a7ce67b9d054cd0d8b387d2f7c39ab9f4b2277d509fc9",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Stock3",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "be85f1126fb3276fbe0a7ce67b9d054cd0d8b387d2f7c39ab9f4b2277d509fc9",
+      "OutputHash": "be85f1126fb3276fbe0a7ce67b9d054cd0d8b387d2f7c39ab9f4b2277d509fc9",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "976faeb6968834be32e595e2b27c788bcd45c96c9505a4746028d7c748971632",
+      "OutputHash": "a2cc486c59be7025f28318956dea8c5aee39707b0f89fa25d1fd7333fec3eeff",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "a2cc486c59be7025f28318956dea8c5aee39707b0f89fa25d1fd7333fec3eeff",
+      "OutputHash": "a2cc486c59be7025f28318956dea8c5aee39707b0f89fa25d1fd7333fec3eeff",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "DeepOcean",
+      "Dynamic": false,
+      "InputHash": "57c4592467ede3f0160ee10632c35352203aa5a6bd510454f05d02d97f50e8ad",
+      "OutputHash": "6bee52850f2a7a8c6439604fd34256c51184fe2caac7f32e0e6f8dc4d7ef4406",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "DeepOcean",
+      "Dynamic": true,
+      "InputHash": "6bee52850f2a7a8c6439604fd34256c51184fe2caac7f32e0e6f8dc4d7ef4406",
+      "OutputHash": "6bee52850f2a7a8c6439604fd34256c51184fe2caac7f32e0e6f8dc4d7ef4406",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "65fdd532e5ce3220d7ed578e7cb040e8269a29d17f2cc6ef544dc6a4b58a2999",
+      "OutputHash": "75aa22611b701af1222a84f406fe0899e7648b537467e26db59a36ffbe0444fe",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "75aa22611b701af1222a84f406fe0899e7648b537467e26db59a36ffbe0444fe",
+      "OutputHash": "75aa22611b701af1222a84f406fe0899e7648b537467e26db59a36ffbe0444fe",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Forest",
+      "Dynamic": false,
+      "InputHash": "9f0aab21e8466b3e49c267a81a9412e689e0eaba8f48abd5cce4e85182ab227e",
+      "OutputHash": "fa39ca36bf9b0fd23d8f193014f6d3a420d8bb1920e91e791f53c68986e7ca60",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Forest",
+      "Dynamic": true,
+      "InputHash": "fa39ca36bf9b0fd23d8f193014f6d3a420d8bb1920e91e791f53c68986e7ca60",
+      "OutputHash": "fa39ca36bf9b0fd23d8f193014f6d3a420d8bb1920e91e791f53c68986e7ca60",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "378a5c60d1f00260b18622f815c728be03b0df1fe32e9004fcba37449b55563b",
+      "OutputHash": "7cb275a17c972a61581c2beb6c9f854860e718ca69f3755efde9fe31d4709ede",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "7cb275a17c972a61581c2beb6c9f854860e718ca69f3755efde9fe31d4709ede",
+      "OutputHash": "7cb275a17c972a61581c2beb6c9f854860e718ca69f3755efde9fe31d4709ede",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Terracotta",
+      "Dynamic": false,
+      "InputHash": "1e49ad72711819fe74987b7324494f0b1018e09e04ee6a6d42d74c0a446aaab6",
+      "OutputHash": "2789d8b91464d7533d525916dc2351f0ad77021d7b7146636cee0b484c0a49fd",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Terracotta",
+      "Dynamic": true,
+      "InputHash": "2789d8b91464d7533d525916dc2351f0ad77021d7b7146636cee0b484c0a49fd",
+      "OutputHash": "2789d8b91464d7533d525916dc2351f0ad77021d7b7146636cee0b484c0a49fd",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "171d0962341ec75ab30cf3318ceda8f89d3c925c05c5ca6431fa1d33bd1e16c8",
+      "OutputHash": "8af9026e500153e43ce6d501cc898917e24a227fe7db3d98422de284a88d6545",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "8af9026e500153e43ce6d501cc898917e24a227fe7db3d98422de284a88d6545",
+      "OutputHash": "8af9026e500153e43ce6d501cc898917e24a227fe7db3d98422de284a88d6545",
+      "Newline": "LF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Obsidian",
+      "Dynamic": false,
+      "InputHash": "4c806ba3157046610093fafb89cc2e1595ee05620782664993a090e6b674f58f",
+      "OutputHash": "596df83609edee2cc8402fdd1660cb73c6a5aa3fbf92c24cc29f54edde53d07a",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    },
+    {
+      "Kind": "Ini",
+      "Family": "Generated",
+      "Theme": "Obsidian",
+      "Dynamic": true,
+      "InputHash": "596df83609edee2cc8402fdd1660cb73c6a5aa3fbf92c24cc29f54edde53d07a",
+      "OutputHash": "596df83609edee2cc8402fdd1660cb73c6a5aa3fbf92c24cc29f54edde53d07a",
+      "Newline": "CRLF",
+      "Encoding": "UTF8-no-BOM"
+    }
+  ]
+}
