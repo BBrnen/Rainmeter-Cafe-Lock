@@ -40,6 +40,20 @@ std::string Permissions(const std::wstring& path)
 void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std::wstring& scenario)
 {
 	using namespace CafeShelf::F1;
+	if (scenario == L"apply-standard")
+	{
+		BYTE admin[SECURITY_MAX_SID_SIZE]{}; DWORD size = sizeof(admin); BOOL member = TRUE;
+		assert(CreateWellKnownSid(WinBuiltinAdministratorsSid, nullptr, admin, &size));
+		assert(CheckTokenMembership(nullptr, admin, &member) && !member);
+		HANDLE token = nullptr; assert(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token));
+		DWORD length = 0; GetTokenInformation(token, TokenIntegrityLevel, nullptr, 0, &length);
+		std::vector<BYTE> data(length);
+		assert(GetTokenInformation(token, TokenIntegrityLevel, data.data(), length, &length));
+		const auto label = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(data.data());
+		const auto sid = label->Label.Sid;
+		assert(*GetSidSubAuthority(sid, *GetSidSubAuthorityCount(sid) - 1) == SECURITY_MANDATORY_MEDIUM_RID);
+		CloseHandle(token);
+	}
 	const auto inspected = Inspect(skins, bundle);
 	assert(inspected.ok);
 	const auto preview = inspected.value;
@@ -57,6 +71,12 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 	std::wstring backup;
 	bool authorized = scenario != L"apply-denied";
 	bool gap = false;
+	HANDLE busy = INVALID_HANDLE_VALUE;
+	if (scenario == L"apply-busy")
+	{
+		busy = CreateFileW((preview.shelfRoot + L"\\" + preview.changes.front().relativePath).c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+		assert(busy != INVALID_HANDLE_VALUE);
+	}
 	SetTestHook([&](const wchar_t* phase, const std::wstring& path)
 	{
 		const std::wstring step(phase);
@@ -96,6 +116,7 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		if (step == L"after-replace") ++replacements;
 	});
 	const auto applied = Apply(preview, [&]() { return authorized; });
+	if (busy != INVALID_HANDLE_VALUE) CloseHandle(busy);
 	if (!applied.ok) std::wcerr << L"Application outcome: " << applied.message << L"; " << applied.value.message << std::endl;
 	SetTestHook({});
 	if (scenario == L"apply-denied") assert(!applied.ok && applied.code == CafeShelf::Error::Locked);
@@ -105,6 +126,7 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		assert(applied.value.backup.empty() && backup.empty());
 	}
 	else if (scenario == L"apply-backup-failure") assert(!applied.ok);
+	else if (scenario == L"apply-busy") assert(!applied.ok && applied.value.backup.empty());
 	else if (scenario == L"apply-recover") assert(applied.value.status == Status::FailedRecovered);
 	else if (scenario == L"apply-abort-gap") assert(gap && applied.value.status == Status::FailedRecovered);
 	else if (scenario == L"apply-revoke-gap")
@@ -140,7 +162,7 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		const auto record = Bytes(backup + L"\\RESTORE.txt");
 		assert(record.find("config.lua") == std::string::npos && record.find("sentinel") == std::string::npos);
 	}
-	if (scenario == L"apply-denied" || scenario == L"apply-backup-failure" || scenario == L"apply-recover" || scenario == L"apply-abort-gap")
+	if (scenario == L"apply-denied" || scenario == L"apply-busy" || scenario == L"apply-backup-failure" || scenario == L"apply-recover" || scenario == L"apply-abort-gap")
 		for (size_t i = 0; i < preview.changes.size(); ++i)
 			assert(Bytes(preview.shelfRoot + L"\\" + preview.changes[i].relativePath) == originals[i]);
 	std::wcout << L"PASS F1 " << scenario << std::endl;

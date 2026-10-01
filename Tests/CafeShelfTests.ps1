@@ -49,7 +49,7 @@ try {
             }
         }
         if ($Suite -eq 'F1CompatibilityApply') {
-            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop', 'apply-abort-gap', 'apply-revoke-gap', 'apply-compete-gap', 'apply-crash-gap')) {
+            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-busy', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop', 'apply-abort-gap', 'apply-revoke-gap', 'apply-compete-gap', 'apply-crash-gap')) {
                 $applyRoot = New-F1Fixture ('F1-apply-' + [guid]::NewGuid().ToString('N'))
                 if ($scenario -eq 'apply-noop') { Set-F1Fixture $applyRoot }
                 & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $applyRoot) $payload $scenario 0 0
@@ -67,6 +67,13 @@ try {
                     continue
                 }
                 if ($LASTEXITCODE -ne 0) { throw "F1 compatibility application case failed: $scenario" }
+            }
+            if ($env:GITHUB_ACTIONS -eq 'true') {
+                & cl.exe /nologo /EHsc /W4 /WX "$repo/Tests/RunAsStandard.cpp" /Fe:RunAsStandardF1.exe /link Advapi32.lib Shlwapi.lib
+                if ($LASTEXITCODE -ne 0) { throw 'F1 standard-user helper compilation failed' }
+                $standardRoot = New-F1Fixture ('F1-standard-' + [guid]::NewGuid().ToString('N'))
+                & ./RunAsStandardF1.exe "`"$output/CafeShelfF1Compatibility.exe`"" "`"$(Split-Path -Parent $standardRoot)`"" "`"$payload`"" apply-standard 0 0
+                if ($LASTEXITCODE -ne 0) { throw 'Standard-user F1 update/permissions verification failed' }
             }
             return
         }
