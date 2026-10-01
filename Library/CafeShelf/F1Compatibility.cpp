@@ -12,6 +12,10 @@
 
 namespace CafeShelf { namespace F1
 {
+#ifdef CAFE_F1_TESTING
+std::function<void(const wchar_t*, const std::wstring&)> testHook;
+void SetTestHook(const std::function<void(const wchar_t*, const std::wstring&)>& hook) { testHook = hook; }
+#endif
 namespace
 {
 using Json = CafeShelfJson::json;
