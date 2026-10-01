@@ -8,6 +8,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <aclapi.h>
+#include "../Common/CafePassword.h"
 
 #ifdef CAFE_F1_TESTING
 namespace CafeShelf { namespace F1 {
@@ -79,6 +80,12 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 	size_t replacements = 0;
 	std::wstring backup;
 	bool authorized = scenario != L"apply-denied";
+	std::unique_ptr<CafeSecurity::PasswordSession> session;
+	if (scenario == L"apply-session-revoke-gap")
+	{
+		session.reset(new CafeSecurity::PasswordSession(skins + L"\\F1-TestPassword.ini"));
+		assert(session->Setup(L"fixture password", L"fixture password") && !session->IsLocked());
+	}
 	bool gap = false;
 	HANDLE busy = INVALID_HANDLE_VALUE;
 	if (scenario == L"apply-busy")
@@ -97,6 +104,7 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 			assert(GetFileAttributesW((backup + L"\\Shelf1\\config.lua").c_str()) == INVALID_FILE_ATTRIBUTES);
 		}
 		if (step == L"before-backup" && scenario == L"apply-backup-failure") throw std::runtime_error("injected backup failure");
+		if (step == L"recovery-vacant" && scenario == L"apply-compete-recovery") OutsideWrite(path, "competing recovery file", true);
 		if (step == L"original-moved" && replacements == 0)
 		{
 			gap = true;
@@ -107,13 +115,14 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 			assert(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES);
 			if (scenario == L"apply-crash-gap") ExitProcess(73);
 			if (scenario == L"apply-revoke-gap") authorized = false;
+			if (scenario == L"apply-session-revoke-gap") session->Lock();
 			if (scenario == L"apply-abort-gap") throw std::runtime_error("interrupted original move");
 			if (scenario == L"apply-compete-gap")
 			{
 				OutsideWrite(path, "competing file", true);
 			}
 		}
-		if (step == L"before-replace" && replacements == 1 && (scenario == L"apply-recover" || scenario == L"apply-outside"))
+		if (step == L"before-replace" && replacements == 1 && (scenario == L"apply-recover" || scenario == L"apply-outside" || scenario == L"apply-compete-recovery"))
 		{
 			if (scenario == L"apply-outside")
 			{
@@ -123,7 +132,7 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		}
 		if (step == L"after-replace") ++replacements;
 	});
-	const auto applied = Apply(preview, [&]() { return authorized; });
+	const auto applied = Apply(preview, [&]() { return authorized && (!session || !session->IsLocked()); });
 	if (busy != INVALID_HANDLE_VALUE) CloseHandle(busy);
 	if (!applied.ok) std::wcerr << L"Application outcome: " << applied.message << L"; " << applied.value.message << std::endl;
 	SetTestHook({});
@@ -137,7 +146,7 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 	else if (scenario == L"apply-busy") assert(!applied.ok && applied.value.backup.empty());
 	else if (scenario == L"apply-recover") assert(applied.value.status == Status::FailedRecovered);
 	else if (scenario == L"apply-abort-gap") assert(gap && applied.value.status == Status::FailedRecovered);
-	else if (scenario == L"apply-revoke-gap")
+	else if (scenario == L"apply-revoke-gap" || scenario == L"apply-session-revoke-gap")
 	{
 		assert(gap && applied.value.status == Status::ManualRecoveryRequired);
 		assert(GetFileAttributesW((preview.shelfRoot + L"\\" + preview.changes.front().relativePath).c_str()) == INVALID_FILE_ATTRIBUTES);
@@ -148,6 +157,11 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		assert(gap && applied.value.status == Status::ManualRecoveryRequired);
 		assert(Bytes(preview.shelfRoot + L"\\" + preview.changes.front().relativePath) == "competing file");
 		assert(Bytes(backup + L"\\Holding\\" + preview.changes.front().relativePath) == originals.front());
+	}
+	else if (scenario == L"apply-compete-recovery")
+	{
+		assert(applied.value.status == Status::ManualRecoveryRequired);
+		assert(Bytes(preview.shelfRoot + L"\\" + preview.changes.front().relativePath) == "competing recovery file");
 	}
 	else if (scenario == L"apply-outside")
 	{

@@ -49,7 +49,7 @@ try {
             }
         }
         if ($Suite -eq 'F1CompatibilityApply') {
-            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-busy', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop', 'apply-abort-gap', 'apply-revoke-gap', 'apply-compete-gap', 'apply-crash-gap')) {
+            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-busy', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop', 'apply-abort-gap', 'apply-revoke-gap', 'apply-session-revoke-gap', 'apply-compete-gap', 'apply-compete-recovery', 'apply-crash-gap')) {
                 $applyRoot = New-F1Fixture ('F1-apply-' + [guid]::NewGuid().ToString('N'))
                 if ($scenario -eq 'apply-noop') { Set-F1Fixture $applyRoot }
                 & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $applyRoot) $payload $scenario 0 0
