@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace CafeShelf::F1
+namespace CafeShelf { namespace F1
 {
 namespace
 {
@@ -252,5 +252,6 @@ Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloa
 Result<ApplyResult> Apply(const Preview&, const std::function<bool()>&)
 {
 	return { false, {}, Error::Unsupported, L"ShelfSuite F1 application is not available yet." };
+}
 }
 }
