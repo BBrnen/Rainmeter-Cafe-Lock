@@ -45,11 +45,21 @@ Git-Checked $upstream (@('archive','--format=zip',"--output=$archive",$pin,'--')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory($archive,$source)
 $original = @{}
-foreach ($rel in $paths) { $original[$rel] = Read-Source (Join-Path $source $rel) }
+foreach ($rel in $paths) {
+    $original[$rel] = Read-Source (Join-Path $source $rel)
+    # git archive may export CRLF according to the builder's checkout policy.
+    # Canonicalize only the verified disposable source, not an installed skin.
+    [IO.File]::WriteAllBytes((Join-Path $source $rel),$utf8.GetBytes($original[$rel]))
+}
 Git-Checked $source @('init','--quiet') | Out-Null
+Git-Checked $source @('config','core.autocrlf','false') | Out-Null
 Git-Checked $source (@('add','--')+$paths) | Out-Null
-Git-Checked $source @('apply','--unidiff-zero','--check',(Join-Path $repo $patchRel)) | Out-Null
-Git-Checked $source @('apply','--unidiff-zero',(Join-Path $repo $patchRel)) | Out-Null
+$temporaryPatch=Join-Path $output 'verified-f1-lf.patch'
+# Only this builder's disposable copy uses canonical Git LF transport.
+# The committed/working F1 patch is verified above and is never rewritten.
+[IO.File]::WriteAllBytes($temporaryPatch,$utf8.GetBytes((Read-Source (Join-Path $repo $patchRel))))
+Git-Checked $source @('apply','--unidiff-zero','--check',$temporaryPatch) | Out-Null
+Git-Checked $source @('apply','--unidiff-zero',$temporaryPatch) | Out-Null
 if (@(Compare-Object @(Git-Checked $source @('diff','--name-only')) $paths).Count) { throw 'Patch touched unexpected paths.' }
 $recognition = @()
 foreach ($rel in $paths[0..1]) {

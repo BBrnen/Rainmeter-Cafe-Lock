@@ -95,6 +95,19 @@ if ($Suite -in @('Package', 'All')) {
         Assert-Refused { Read-F1Package $corrupt } 'duplicate package file'
     }
     Test-Case 'FreshOutputRequired' { Assert-Refused { & $builder -UpstreamDirectory $upstream -OutputDirectory "$scratch/build" } 'existing output' }
+    Test-Case 'CRLFCheckoutPatchBuildsEquivalentPayload' {
+        $clone=Join-Path $scratch 'windows-checkout'
+        git clone --quiet --shared --no-checkout $repo $clone
+        git -C $clone checkout --quiet HEAD -- Library/CafeShelf/ShelfTemplate.h ThirdParty/ShelfSuite/patches/0001-cafe-lock-adaptive-tabs.patch
+        Write-Fixture "$clone/Build/ShelfSuiteF1/Package.ps1" ([IO.File]::ReadAllBytes($builder))
+        $patch="$clone/ThirdParty/ShelfSuite/patches/0001-cafe-lock-adaptive-tabs.patch"
+        $text=$script:Utf8.GetString([IO.File]::ReadAllBytes($patch)).Replace("`r`n","`n").Replace("`n","`r`n")
+        [IO.File]::WriteAllBytes($patch,$script:Utf8.GetBytes($text))
+        & "$clone/Build/ShelfSuiteF1/Package.ps1" -UpstreamDirectory $upstream -OutputDirectory "$scratch/windows-build" | Out-Null
+        foreach ($rel in @('@Resources/ShelfEngine.lua','@Resources/Variables.inc')) {
+            Assert-True ((Hash-Bytes ([IO.File]::ReadAllBytes("$scratch/windows-build/package/payload/$rel"))) -eq (Hash-Bytes ([IO.File]::ReadAllBytes("$built/payload/$rel")))) 'Windows patch checkout changes payload'
+        }
+    }
     Test-Case 'ExtractedZipVerifierRejectsCorruptionAndMissingEntry' {
         Assert-True (Test-Path "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1") 'extracted ZIP verifier must exist'
         . "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1"
