@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
+#include <memory>
 #include <aclapi.h>
 #include "../Common/CafePassword.h"
 
