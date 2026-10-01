@@ -92,7 +92,10 @@ function Preview-Text($dialog,[switch]$Expand) {
     $reader = Start-Process -FilePath "$PSScriptRoot/../CafeF1PreviewProbe.exe" -ArgumentList $arguments -PassThru -WindowStyle Hidden
     try {
         if (-not $reader.WaitForExit(30000)) { Stop-Process -Id $reader.Id -Force; throw 'UI Automation reader timed out.' }
-        if ($reader.ExitCode -ne 0) { throw 'Could not inspect native F1 preview with the standard-user observer.' }
+        if ($reader.ExitCode -ne 0) {
+            $detail = if(Test-Path -LiteralPath $snapshot){Get-Content -LiteralPath $snapshot -Raw -Encoding unicode}else{'no observer detail'}
+            throw ('Could not inspect native F1 preview: ' + $detail)
+        }
         return (Get-Content -LiteralPath $snapshot -Raw -Encoding utf8)
     } finally { $reader.Dispose() }
 }

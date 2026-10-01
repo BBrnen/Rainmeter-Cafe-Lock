@@ -7,19 +7,23 @@
 #include <cwchar>
 #include <cstdlib>
 using Microsoft::WRL::ComPtr;
+const wchar_t* phase = L"dialog identity";
 
 HRESULT Observe(HWND window, DWORD expectedProcess, const wchar_t* output, bool expand)
 {
 	DWORD process = 0; GetWindowThreadProcessId(window, &process);
 	wchar_t title[128]{}; GetWindowTextW(window, title, _countof(title));
 	if (process != expectedProcess || wcscmp(title, L"ShelfSuite F1 compatibility")) return E_ACCESSDENIED;
+	phase = L"UI Automation activation";
 	ComPtr<IUIAutomation> automation;
 	HRESULT result = CoCreateInstance(__uuidof(CUIAutomation), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&automation));
 	if (FAILED(result)) return result;
 	ComPtr<IUIAutomationElement> root;
+	phase = L"UI Automation dialog element";
 	if (FAILED(result = automation->ElementFromHandle(window, &root))) return result;
 	if (expand)
 	{
+		phase = L"file-list expander";
 		VARIANT name{}; name.vt = VT_BSTR; name.bstrVal = SysAllocString(L"Show file list");
 		ComPtr<IUIAutomationCondition> condition;
 		result = automation->CreatePropertyCondition(UIA_NamePropertyId, name, &condition); VariantClear(&name);
@@ -31,6 +35,7 @@ HRESULT Observe(HWND window, DWORD expectedProcess, const wchar_t* output, bool 
 		if (FAILED(result = invoke->Invoke())) return result;
 	}
 	ComPtr<IUIAutomationCondition> all;
+	phase = L"preview text enumeration";
 	if (FAILED(result = automation->CreateTrueCondition(&all))) return result;
 	ComPtr<IUIAutomationElementArray> elements;
 	if (FAILED(result = root->FindAll(TreeScope_Descendants, all.Get(), &elements))) return result;
@@ -48,6 +53,7 @@ HRESULT Observe(HWND window, DWORD expectedProcess, const wchar_t* output, bool 
 		if (text.size() > 1024 * 1024) return E_FAIL;
 	}
 	const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+	phase = L"preview snapshot write";
 	if (!size) return E_FAIL;
 	std::string bytes(static_cast<size_t>(size), '\0');
 	if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), &bytes[0], size, nullptr, nullptr)) return E_FAIL;
@@ -67,6 +73,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 		result = Observe(reinterpret_cast<HWND>(static_cast<UINT_PTR>(_wcstoui64(arguments[1], nullptr, 10))),
 			static_cast<DWORD>(wcstoul(arguments[2], nullptr, 10)), arguments[3], wcscmp(arguments[4], L"1") == 0);
 		CoUninitialize();
+	}
+	if (FAILED(result))
+	{
+		const std::wstring detail = std::wstring(L"Observer failure at ") + phase + L"; HRESULT=" + std::to_wstring(static_cast<DWORD>(result));
+		HANDLE file = CreateFileW(arguments[3], GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (file != INVALID_HANDLE_VALUE) { DWORD written = 0; WriteFile(file, detail.data(), static_cast<DWORD>(detail.size() * sizeof(wchar_t)), &written, nullptr); FlushFileBuffers(file); CloseHandle(file); }
 	}
 	LocalFree(arguments); return SUCCEEDED(result) ? 0 : 1;
 }
