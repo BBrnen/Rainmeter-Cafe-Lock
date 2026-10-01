@@ -56,8 +56,6 @@ arguments or an elevation flag, is exercised by the standard-user test, remains
 after upgrade, and is removed on uninstall. Startup occurs at Windows **sign-in**,
 not before a user signs in. Each Windows account has its own password/profile.
 
-## Checks requiring a disposable Windows desktop
-
 ## Native F1 compatibility coverage
 
 The Maintenance-only Settings action is tested with Rainmeter running and stock
