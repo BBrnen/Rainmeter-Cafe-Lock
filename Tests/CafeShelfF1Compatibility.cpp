@@ -17,9 +17,12 @@ namespace
 {
 std::string Bytes(const std::wstring& path)
 {
-	std::ifstream file(path, std::ios::binary);
-	assert(file.good());
-	return { std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>() };
+	HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+	assert(file != INVALID_HANDLE_VALUE);
+	LARGE_INTEGER size{}; assert(GetFileSizeEx(file, &size) && size.HighPart == 0);
+	std::string bytes(size.LowPart, '\0'); DWORD read = 0;
+	assert(ReadFile(file, bytes.empty() ? nullptr : &bytes[0], size.LowPart, &read, nullptr) && read == size.LowPart);
+	CloseHandle(file); return bytes;
 }
 std::string Permissions(const std::wstring& path)
 {
