@@ -20,6 +20,7 @@ constexpr wchar_t ShelfRootName[] = L"Shelf Suite";
 constexpr char UpstreamRevision[] = "d4f186ba0b5c262c7559b80841132f5fd3884f3c";
 constexpr char F1Revision[] = "c6ce82ab7c2e9f901b01c712a0efd22bdee6d5c9";
 constexpr char PatchHash[] = "6c4913af57f1b8542d287c72b08e3ee840275cae51b7f7a96df40707891956e9";
+constexpr wchar_t ManifestHash[] = L"1b4869f15aa72ce9febc31ccf3b8df10f0cbbf91e8b7f82755386526affe0aed";
 
 struct CatalogEntry
 {
@@ -174,6 +175,7 @@ std::vector<CatalogEntry> ReadCatalog(const std::wstring& payload)
 	Pins pins;
 	PinDirectories(JoinPath(payload, L"payload\\@Resources"), pins);
 	const auto manifestBytes = ReadTarget(JoinPath(payload, L"manifest.json"));
+	if (Sha256(manifestBytes) != ManifestHash) throw std::runtime_error("unapproved compatibility manifest");
 	const std::string manifestText(manifestBytes.begin(), manifestBytes.end());
 	const auto manifest = Json::parse(manifestText);
 	if (manifest.value("SchemaVersion", 0) != 1 || manifest.value("UpstreamRevision", "") != UpstreamRevision ||
