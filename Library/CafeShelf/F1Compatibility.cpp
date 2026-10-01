@@ -180,7 +180,7 @@ std::vector<CatalogEntry> ReadCatalog(const std::wstring& payload)
 		{
 			entry.path = ToWide(item.at("Path").get<std::string>());
 			const auto source = item.at("Payload").get<std::string>();
-			if ((entry.path != L"@Resources/ShelfEngine.lua" && entry.path != L"@Resources/Variables.inc") || source != "payload/" + std::string(entry.path.begin(), entry.path.end()))
+            if ((entry.path != L"@Resources/ShelfEngine.lua" && entry.path != L"@Resources/Variables.inc") || source != "payload/" + item.at("Path").get<std::string>())
 			{
 				throw std::runtime_error("unapproved shared catalog path");
 			}
