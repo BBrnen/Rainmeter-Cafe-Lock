@@ -60,6 +60,32 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  cafe-f1-inspection:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out native F1 inspection sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Check out pinned original ShelfSuite inspection inputs
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: MartinSantosT/ShelfSuite
+          ref: d4f186ba0b5c262c7559b80841132f5fd3884f3c
+          path: work-package/ShelfSuite
+          persist-credentials: false
+      - name: Audit the bundled native ShelfSuite F1 payload
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests/CafeShelfF1NativePayload.ps1 -UpstreamDirectory work-package/ShelfSuite
+
+      - name: Test native ShelfSuite F1 inspection
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1Compatibility -UpstreamDirectory work-package\ShelfSuite
+
   cafe-lock-x64:
     runs-on: windows-2022
     timeout-minutes: 45
@@ -141,17 +167,6 @@ jobs:
           ref: d4f186ba0b5c262c7559b80841132f5fd3884f3c
           path: work-package/ShelfSuite
           persist-credentials: false
-
-      - name: Audit the bundled native ShelfSuite F1 payload
-        shell: pwsh
-        run: pwsh -NoProfile -File Tests/CafeShelfF1NativePayload.ps1 -UpstreamDirectory work-package/ShelfSuite
-
-      - name: Test native ShelfSuite F1 inspection
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          if errorlevel 1 exit /b 1
-          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1Compatibility -UpstreamDirectory work-package\ShelfSuite
 
       - name: Apply the audited ShelfSuite adaptive-tab patch
         shell: pwsh
