@@ -29,7 +29,16 @@ function Invoke-F1DeliveryRunner([string]$ArchivePath,[string]$SourceDirectory) 
     & icacls $extract /setintegritylevel '(OI)(CI)M' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not set fixture integrity.' }
     $power=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
-    & "$PSScriptRoot/../RunAsStandard.exe" $power -NoProfile -File "$PSScriptRoot/CafeShelfF1Delivery.ps1" -Suite All -PackageDirectory $extract -UpstreamDirectory ([IO.Path]::GetFullPath($SourceDirectory)) -StandardUser
+    # Git/provenance tests run as build preparation; the owner runtime needs no Git.
+    & $power -NoProfile -File "$PSScriptRoot/CafeShelfF1Delivery.ps1" -Suite Package -PackageDirectory $extract -UpstreamDirectory ([IO.Path]::GetFullPath($SourceDirectory))
+    if ($LASTEXITCODE -ne 0) { throw 'Package-builder verification failed.' }
+    $fixtures=Join-Path $env:RUNNER_TEMP ('CafeF1Prepared-'+[Guid]::NewGuid().ToString('N'))
+    & "$PSScriptRoot/../Build/ShelfSuiteF1/Package.ps1" -UpstreamDirectory $SourceDirectory -OutputDirectory $fixtures | Out-Null
+    & icacls $fixtures /grant "*${sid}:(OI)(CI)F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not permit prepared fixture access.' }
+    & icacls $fixtures /setintegritylevel '(OI)(CI)M' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not set prepared fixture integrity.' }
+    & "$PSScriptRoot/../RunAsStandard.exe" $power -NoProfile -File "$PSScriptRoot/CafeShelfF1Delivery.ps1" -Suite All -PackageDirectory $extract -UpstreamDirectory ([IO.Path]::GetFullPath($SourceDirectory)) -FixtureBuildDirectory $fixtures -StandardUser
     if ($LASTEXITCODE -ne 0) { throw "Extracted-ZIP standard-user tests failed: $LASTEXITCODE" }
     Write-Output 'PASS extracted ZIP: complete package tests ran under the restricted token.'
 }

@@ -1,6 +1,7 @@
 param(
     [ValidateSet('Package', 'Preflight', 'Apply', 'UI', 'All')][string]$Suite = 'All',
     [string]$PackageDirectory,
+    [string]$FixtureBuildDirectory,
     [Parameter(Mandatory = $true)][string]$UpstreamDirectory,
     [switch]$StandardUser
 )
@@ -14,6 +15,7 @@ if ($StandardUser) {
     Assert-True (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) 'restricted test token must not be admin'
     Assert-True ([CafeF1TestToken]::Integrity() -eq 8192) 'restricted test token must have medium integrity RID 8192'
     Assert-True ($PackageDirectory -and [IO.Path]::GetFullPath($PackageDirectory).StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)) 'standard-user tests must load extracted package inside RUNNER_TEMP'
+    Assert-True ($FixtureBuildDirectory -and [IO.Path]::GetFullPath($FixtureBuildDirectory).StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)) 'standard-user fixtures must be prepared inside RUNNER_TEMP'
     Write-Output 'PASS standard-user runtime: Windows PowerShell 5.1, admin=false, integrity RID=8192, extracted package'
 }
 $script:Passed = 0
@@ -22,12 +24,19 @@ $upstream = [IO.Path]::GetFullPath($UpstreamDirectory)
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('CafeF1Tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($scratch) | Out-Null
 $builder = Join-Path $repo 'Build/ShelfSuiteF1/Package.ps1'
-Assert-True (Test-Path -LiteralPath $builder) 'F1 package builder must exist'
-& $builder -UpstreamDirectory $upstream -OutputDirectory (Join-Path $scratch 'build') | Out-Null
+if ($FixtureBuildDirectory) {
+    Assert-True ($Suite -ne 'Package') 'package-builder tests cannot use prepared fixtures'
+    Copy-Item -LiteralPath $FixtureBuildDirectory -Destination (Join-Path $scratch 'build') -Recurse
+    Write-Output 'PASS prepared owner-runtime fixtures: no package builder or Git invocation'
+} else {
+    Assert-True (-not $StandardUser) 'restricted owner runtime must not invoke builder'
+    Assert-True (Test-Path -LiteralPath $builder) 'F1 package builder must exist'
+    & $builder -UpstreamDirectory $upstream -OutputDirectory (Join-Path $scratch 'build') | Out-Null
+}
 $built = Join-Path $scratch 'build/package'
 $manifest = Get-Content -LiteralPath "$built/manifest.json" -Raw | ConvertFrom-Json
 if (-not $PackageDirectory) { $PackageDirectory = $built }
-if ($Suite -in @('Package', 'All')) {
+if ($Suite -in @('Package', 'All') -and -not $FixtureBuildDirectory) {
     Test-Case 'ExactPinnedSourceOnly' {
         Assert-True ($manifest.UpstreamRevision -eq 'd4f186ba0b5c262c7559b80841132f5fd3884f3c') 'wrong upstream provenance'
         $bad = Join-Path $scratch 'wrong-revision'
@@ -95,6 +104,15 @@ if ($Suite -in @('Package', 'All')) {
         Assert-Refused { Read-F1Package $corrupt } 'duplicate package file'
     }
     Test-Case 'FreshOutputRequired' { Assert-Refused { & $builder -UpstreamDirectory $upstream -OutputDirectory "$scratch/build" } 'existing output' }
+    Test-Case 'OwnerRuntimeUsesPreparedFixturesWithoutBuilder' {
+        $isolated=Join-Path $scratch 'no-builder-repository'
+        foreach ($rel in @('Tests/CafeShelfF1Delivery.ps1','Tests/CafeShelfF1DeliveryFixtures.ps1','Tests/CafeShelfF1DeliveryRunner.ps1','Library/CafeShelf/ShelfTemplate.h')) {
+            Write-Fixture "$isolated/$rel" ([IO.File]::ReadAllBytes("$repo/$rel"))
+        }
+        $power=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+        & $power -NoProfile -ExecutionPolicy Bypass -File "$isolated/Tests/CafeShelfF1Delivery.ps1" -Suite Preflight -PackageDirectory $PackageDirectory -UpstreamDirectory $upstream -FixtureBuildDirectory "$scratch/build"
+        Assert-True ($LASTEXITCODE -eq 0) 'owner-runtime tests require builder or Git'
+    }
     Test-Case 'BuilderUsesRealGitDespiteSessionShadowing' {
         function global:git { return 'not the native git executable' }
         try {
