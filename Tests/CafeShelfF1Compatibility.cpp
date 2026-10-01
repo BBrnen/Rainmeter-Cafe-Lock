@@ -184,7 +184,17 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		assert(!backup.empty());
 		for (size_t i = 0; i < preview.changes.size(); ++i)
 		{
-			assert(Permissions(preview.shelfRoot + L"\\" + preview.changes[i].relativePath) == permissions[i]);
+			const auto actualPermissions = Permissions(preview.shelfRoot + L"\\" + preview.changes[i].relativePath);
+			if (actualPermissions != permissions[i])
+			{
+				std::wcout << L"Permission mismatch: " << preview.changes[i].relativePath << std::endl;
+				for (const auto& value : { permissions[i], actualPermissions })
+				{
+					for (const unsigned char byte : value) std::cout << std::hex << static_cast<unsigned int>(byte) << ' ';
+					std::cout << std::dec << std::endl;
+				}
+			}
+			assert(actualPermissions == permissions[i]);
 			assert(GetFileAttributesW((preview.shelfRoot + L"\\" + preview.changes[i].relativePath).c_str()) == attributes[i]);
 		}
 		const auto record = Bytes(backup + L"\\RESTORE.txt");
