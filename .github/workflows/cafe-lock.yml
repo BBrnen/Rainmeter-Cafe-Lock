@@ -86,6 +86,13 @@ jobs:
           if errorlevel 1 exit /b 1
           pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1Compatibility -UpstreamDirectory work-package\ShelfSuite
 
+      - name: Test native ShelfSuite F1 backup and recovery
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1CompatibilityApply -UpstreamDirectory work-package\ShelfSuite
+
   cafe-lock-x64:
     runs-on: windows-2022
     timeout-minutes: 45

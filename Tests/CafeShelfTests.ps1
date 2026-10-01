@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'F1Compatibility', 'All')]
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'F1Compatibility', 'F1CompatibilityApply', 'All')]
     [string]$Suite = 'Protocol',
     [string]$UpstreamDirectory
 )
@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
     $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage') } else { @($Suite) }
-    if ($tests -contains 'F1Compatibility') {
+    if ($Suite -in @('F1Compatibility', 'F1CompatibilityApply')) {
         if (-not $UpstreamDirectory) { throw 'F1Compatibility requires the disposable unchanged pinned ShelfSuite checkout.' }
         $upstream = (Resolve-Path $UpstreamDirectory).Path
         $payload = Join-Path $repo 'ThirdParty/ShelfSuite/F1Compatibility'
@@ -20,6 +20,7 @@ try {
         $compilerArgs = @('/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
             "$repo/Tests/CafeShelfF1Compatibility.cpp", "$repo/Library/CafeShelf/F1Compatibility.cpp",
             '/Fe:CafeShelfF1Compatibility.exe', '/link', 'bcrypt.lib')
+        if ($Suite -eq 'F1CompatibilityApply') { $compilerArgs = @('/DCAFE_F1_TESTING') + $compilerArgs }
         & cl.exe @compilerArgs
         if ($LASTEXITCODE -ne 0) { throw 'CafeShelf F1Compatibility compilation failed' }
         function New-F1Fixture([string]$Name) {
@@ -46,6 +47,15 @@ try {
                 }
                 [IO.File]::WriteAllBytes($ini, [Text.UTF8Encoding]::new($false).GetBytes($text))
             }
+        }
+        if ($Suite -eq 'F1CompatibilityApply') {
+            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop')) {
+                $applyRoot = New-F1Fixture ('F1-apply-' + [guid]::NewGuid().ToString('N'))
+                if ($scenario -eq 'apply-noop') { Set-F1Fixture $applyRoot }
+                & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $applyRoot) $payload $scenario 0 0
+                if ($LASTEXITCODE -ne 0) { throw "F1 compatibility application case failed: $scenario" }
+            }
+            return
         }
         Set-F1Fixture $root
         & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload already 0 7
