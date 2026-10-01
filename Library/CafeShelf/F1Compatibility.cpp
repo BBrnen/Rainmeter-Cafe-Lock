@@ -445,6 +445,7 @@ Result<ApplyResult> Apply(const Preview& preview, const std::function<bool()>& a
 {
 	ApplyResult outcome;
 	std::vector<Replacement> replacements;
+	std::vector<Handle> backupLeases;
 	Pins pins;
 	Handle phase;
 	std::wstring current;
@@ -515,8 +516,15 @@ Result<ApplyResult> Apply(const Preview& preview, const std::function<bool()>& a
 			item.stagePath = JoinPath(Parent(JoinPath(root, current)), L".cafe-f1-" + Nonce() + L".stage");
 			Handle originalCopy = CreateFileNew(JoinPath(backup, current), authorized);
 			WriteFlush(originalCopy.value, item.bytes, authorized);
-			Need(Sha256(ReadBytes(originalCopy.value)) == item.change.originalHash, "backup verification failed");
+			std::wstring backupIdentity;
+			Need(Sha256(ReadBytes(originalCopy.value, &backupIdentity)) == item.change.originalHash, "backup verification failed");
 			PreserveMetadata(item.original.value, originalCopy.value, authorized);
+			originalCopy.Close();
+			Handle snapshot(CreateFileW(JoinPath(backup, current).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+			Need(snapshot.value != INVALID_HANDLE_VALUE, "cannot retain verified backup lease");
+			std::wstring snapshotIdentity;
+			Need(Sha256(ReadBytes(snapshot.value, &snapshotIdentity)) == item.change.originalHash && snapshotIdentity == backupIdentity, "backup changed before lease");
+			backupLeases.push_back(std::move(snapshot));
 			record += L"\r\nFile: " + current + L"\r\nOriginal SHA256: " + item.change.originalHash + L"\r\nF1 SHA256: " + item.change.outputHash +
 				L"\r\nOriginal identity: " + item.change.identity + L"\r\nStaged: " + item.stagePath + L"\r\nHolding: " + item.holdingPath + L"\r\n";
 		}
