@@ -23,6 +23,7 @@ function Backups { return @(Get-ChildItem -LiteralPath $skins -Directory -Filter
 $before = Target-Hashes
 # Unrelated data is held unreadable throughout the native operation. Test code
 # does not inspect these files while the operation runs.
+[IO.File]::WriteAllText((Join-Path $shelf 'Shelf27/config.lua'), '-- isolated unreadable sentinel')
 $config = [IO.File]::Open((Join-Path $shelf 'Shelf27/config.lua'), 'Open', 'Read', 'None')
 $ini = Join-Path $root 'Rainmeter.ini'
 @"
