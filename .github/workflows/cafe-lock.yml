@@ -175,6 +175,14 @@ jobs:
           path: work-package/ShelfSuite
           persist-credentials: false
 
+      - name: Test native F1 UI with original loaded ShelfSuite
+        shell: pwsh
+        run: |
+          # Runtime test staging only; installer delivery is tested separately.
+          New-Item -ItemType Directory -Force x64-Release/Compatibility | Out-Null
+          Copy-Item ThirdParty/ShelfSuite/F1Compatibility x64-Release/Compatibility/ShelfSuiteF1 -Recurse
+          pwsh -NoProfile -File Tests/CafeShelfTests.ps1 -Suite F1CompatibilityUi -UpstreamDirectory work-package/ShelfSuite
+
       - name: Apply the audited ShelfSuite adaptive-tab patch
         shell: pwsh
         run: |

@@ -1,11 +1,16 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'F1Compatibility', 'F1CompatibilityApply', 'All')]
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'F1Compatibility', 'F1CompatibilityApply', 'F1CompatibilityUi', 'All')]
     [string]$Suite = 'Protocol',
     [string]$UpstreamDirectory
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = Split-Path $PSScriptRoot -Parent
+if ($Suite -eq 'F1CompatibilityUi') {
+    & "$repo/RunAsStandard.exe" 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -File "$repo/Tests/CafeShelfF1Ui.ps1" -UpstreamDirectory $UpstreamDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'F1 native UI verification failed.' }
+    return
+}
 if ($UpstreamDirectory) { $UpstreamDirectory = (Resolve-Path -LiteralPath $UpstreamDirectory).Path }
 $output = Join-Path $repo 'work-package/CafeShelfTests'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
