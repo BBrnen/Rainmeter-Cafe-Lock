@@ -578,6 +578,9 @@ Result<ApplyResult> Apply(const Preview& preview, const std::function<bool()>& a
 	catch (const Failure& error) { failureCode = error.code; failureMessage = error.message; }
 	catch (const std::exception&) { failureMessage = current + L": compatibility operation could not finish safely."; }
 
+	// Placements before failure are historical, not completed updates. Recovery
+	// outcomes and incomplete paths are reported separately below.
+	outcome.changed.clear();
 	bool hadMove = false;
 	for (auto iterator = replacements.rbegin(); iterator != replacements.rend(); ++iterator)
 	{
