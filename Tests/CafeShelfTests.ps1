@@ -6,13 +6,14 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = Split-Path $PSScriptRoot -Parent
+if ($UpstreamDirectory) { $UpstreamDirectory = (Resolve-Path -LiteralPath $UpstreamDirectory).Path }
 $output = Join-Path $repo 'work-package/CafeShelfTests'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
     $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage') } else { @($Suite) }
     if ($tests -contains 'F1Compatibility') {
-        if (-not $UpstreamDirectory) { throw 'F1Compatibility requires the disposable patched ShelfSuite checkout.' }
+        if (-not $UpstreamDirectory) { throw 'F1Compatibility requires the disposable unchanged pinned ShelfSuite checkout.' }
         $upstream = (Resolve-Path $UpstreamDirectory).Path
         $payload = Join-Path $repo 'ThirdParty/ShelfSuite/F1Compatibility'
         $fixtureScript = Join-Path $repo 'Tests/CafeShelfF1CompatibilityFixtures.ps1'
@@ -40,7 +41,9 @@ try {
                 $bytes = [IO.File]::ReadAllBytes($ini)
                 $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
                 $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
-                $text = $text.Replace("AccurateText=1$newline", "AccurateText=1${newline}DynamicWindowSize=1${newline}")
+                if (-not $text.Contains("DynamicWindowSize=1$newline")) {
+                    $text = $text.Replace("AccurateText=1$newline", "AccurateText=1${newline}DynamicWindowSize=1${newline}")
+                }
                 [IO.File]::WriteAllBytes($ini, [Text.UTF8Encoding]::new($false).GetBytes($text))
             }
         }
@@ -66,6 +69,7 @@ try {
         & ./CafeShelfF1Compatibility.exe (Join-Path $empty 'Skins') $payload refused 0 0
         if ($LASTEXITCODE -ne 0) { throw 'No-shelf fixture was accepted' }
         Write-Host 'PASS F1Compatibility: recognized Shelf1, Shelf2, Shelf3, Shelf4, and Shelf27 by complete contents; refused unknown Shelf99 and no-shelf fixtures without reading locked config, icon, or theme sentinels.'
+        return
     }
     if ($tests -contains 'Selection' -or $tests -contains 'Host' -or $tests -contains 'Browser') {
         & "$repo/Build/CafeDependencies/Restore.ps1"

@@ -2,7 +2,7 @@ name: Build and test Cafe Lock
 
 on:
   push:
-    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer, stage-6-compatibility]
+    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer, stage-6-compatibility, feature/f1-installer-finalization]
   pull_request:
     branches: [main, stage-2-baseline-build, stage-3-cafe-lock, stage-4-maintenance, stage-5-installer]
   workflow_dispatch:
@@ -142,6 +142,17 @@ jobs:
           path: work-package/ShelfSuite
           persist-credentials: false
 
+      - name: Audit the bundled native ShelfSuite F1 payload
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests/CafeShelfF1NativePayload.ps1 -UpstreamDirectory work-package/ShelfSuite
+
+      - name: Test native ShelfSuite F1 inspection
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1Compatibility -UpstreamDirectory work-package\ShelfSuite
+
       - name: Apply the audited ShelfSuite adaptive-tab patch
         shell: pwsh
         run: |
@@ -160,17 +171,6 @@ jobs:
           )
           $difference = Compare-Object -ReferenceObject $expected -DifferenceObject $actual
           if ($difference) { throw "ShelfSuite patch changed unexpected paths: $($difference | Out-String)" }
-
-      - name: Audit the bundled native ShelfSuite F1 payload
-        shell: pwsh
-        run: pwsh -NoProfile -File Tests/CafeShelfF1NativePayload.ps1 -UpstreamDirectory work-package/ShelfSuite
-
-      - name: Test native ShelfSuite F1 inspection
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          if errorlevel 1 exit /b 1
-          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1Compatibility -UpstreamDirectory work-package\ShelfSuite
 
       - name: Test real ShelfSuite with a standard-user token
         shell: cmd
