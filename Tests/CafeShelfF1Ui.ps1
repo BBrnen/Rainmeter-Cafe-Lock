@@ -121,6 +121,7 @@ try {
     Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$shelf\Shelf1\Shelf.ini") -ne [IntPtr]::Zero } 'loaded stock Shelf1'
     $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$shelf\Shelf1\Shelf.ini")
     $position = Position $window
+    Write-Output ("F1 fixture startup position: " + $position)
     [void][LockNative]::Send($tray,0x111,118,0)
     [LockNative]::Bang($control,'!Manage Settings')
     $dialog = Password-Dialog 'Create Cafe Lock Password'
