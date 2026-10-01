@@ -3,11 +3,17 @@
 #include <cassert>
 
 // This executable tests the locked policy; password/state tests exercise the real session class.
-bool CafeLock::IsLocked() { return true; }
+namespace { bool locked = true; }
+bool CafeLock::IsLocked() { return locked; }
 
 int main()
 {
 	assert(CafeLock::IsLocked());
+	assert(!CafeLock::AllowsF1Compatibility());
+	locked = false;
+	assert(CafeLock::AllowsF1Compatibility());
+	locked = true;
+	assert(!CafeLock::AllowsF1Compatibility());
 	assert(!CafeLock::AllowsBang(Bang::Manage));
 	assert(!CafeLock::AllowsBang(Bang::DeactivateConfig));
 	assert(!CafeLock::AllowsBang(Bang::LoadLayout));
