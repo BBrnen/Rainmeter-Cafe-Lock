@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!-- Adapted from ShelfSuite v2.1 configurator, copyright (c) 2025 Martin Santos, MIT. -->
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ShelfSuite — Maintenance Mode</title><link rel="stylesheet" href="app.css"><script src="app.js" defer></script></head>
+<body>
+<div class="container">
+<header class="header"><div class="header-title"><div class="header-text"><h1>ShelfSuite Configurator</h1><p>Rainmeter Cafe Lock · Maintenance Mode</p></div></div>
+<div class="header-actions"><button id="reloadBtn" type="button">Reload shelves</button><button id="lockNow" type="button">Lock Now</button></div></header>
+<div class="main-wrapper"><aside class="sidebar"><div class="sidebar-title">Your shelves</div><nav id="shelvesNav" class="sidebar-nav" aria-label="Shelves"></nav>
+<div class="toolbar"><button id="addShelfBtn" type="button">Add shelf</button><button id="removeShelfBtn" type="button">Remove shelf</button></div>
+<p class="sidebar-note">Changes apply to your existing ShelfSuite. A recovery copy is kept when you save.</p></aside>
+<main class="editor-main"><h2 id="shelfTitle">Loading shelves…</h2><p id="shelfError" role="alert"></p>
+<div class="toolbar"><label for="themeSelect">Theme</label><select id="themeSelect"><option value="">Custom / unavailable</option><option value="DeepOcean">Deep Ocean</option><option value="Forest">Forest</option><option value="Terracotta">Terracotta</option><option value="Obsidian">Obsidian</option></select><button id="themeSaveBtn" type="button">Apply theme</button></div>
+<div class="toolbar"><nav id="tabsNav" aria-label="Tabs"></nav><button id="addTabBtn" type="button">Add tab</button><button id="renameTabBtn" type="button">Rename tab</button><button id="removeTabBtn" type="button">Remove tab</button></div>
+<div class="toolbar"><p id="capacity"></p><button id="addItemBtn" type="button">Add Item</button></div>
+<div id="itemsList" class="launcher-list"></div>
+<p id="status" role="status" aria-live="polite"></p>
+<details><summary>Folder diagnostics</summary><p id="shelfRoot"></p></details>
+<footer>ShelfSuite by Martin Santos · MIT License · Integrated Cafe Lock editor</footer>
+</main></div></div>
+<dialog id="itemModal"><form id="itemForm" method="dialog">
+<h2 id="itemModalHeader">Add launcher</h2>
+<div id="launcherDrop" class="drop-zone" tabindex="0">Drop a Windows shortcut, application, folder or file here
+<div class="toolbar"><button id="browseLauncher" type="button">Browse for launcher / file</button><button id="browseFolder" type="button">Browse for folder</button></div></div>
+<label for="itemLabel">Name</label><input id="itemLabel" maxlength="32767" required autocomplete="off">
+<label for="itemAction">Launch action</label><input id="itemAction" maxlength="32767" required autocomplete="off" spellcheck="false">
+<p class="help">Shortcuts keep their original arguments and working folder. A launcher runs only when you click it on your shelf.</p>
+<div id="iconDrop" class="drop-zone" tabindex="0">Drop a PNG, ICO, EXE or shortcut for a custom icon
+<button id="browseIcon" type="button">Browse for custom icon</button></div>
+<div class="icon-row"><img id="iconPreview" alt="Prepared launcher icon" width="64" height="64" hidden>
+<div><label for="itemIcon">Icon in ShelfSuite</label><input id="itemIcon" list="stockIcons" maxlength="255" value="file.png" required autocomplete="off"><datalist id="stockIcons"></datalist></div></div>
+<p id="iconStatus" class="help"></p><p id="itemError" role="alert"></p>
+<div class="dialog-actions"><button id="itemCancelBtn" type="button">Cancel</button><button id="itemSaveBtn" type="submit">Save</button></div>
+</form></dialog>
+<dialog id="tabModal"><form id="tabForm" method="dialog"><h2 id="tabHeading">Tab</h2><label for="tabName">Name</label><input id="tabName" maxlength="32767" required>
+<p id="tabError" role="alert"></p><div class="dialog-actions"><button id="tabCancelBtn" type="button">Cancel</button><button id="tabSaveBtn" type="submit">Save</button></div></form></dialog>
+<dialog id="confirmModal"><h2>Remove from ShelfSuite?</h2><p id="confirmText"></p><div class="dialog-actions"><button id="confirmCancel" type="button">Cancel</button><button id="confirmRemove" type="button">Remove</button></div></dialog>
+</body></html>

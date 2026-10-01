@@ -2,7 +2,7 @@ name: Build and test Cafe Lock
 
 on:
   push:
-    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer, stage-6-compatibility]
+    branches: [stage-3-cafe-lock, stage-4-maintenance, stage-5-installer, stage-6-compatibility, feature/f1-installer-finalization]
   pull_request:
     branches: [main, stage-2-baseline-build, stage-3-cafe-lock, stage-4-maintenance, stage-5-installer]
   workflow_dispatch:
@@ -11,6 +11,104 @@ permissions:
   contents: read
 
 jobs:
+  cafe-runtime-policy:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out prerequisite policy tests
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Test compiled optional prerequisite decisions
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          ./Tests/CafeRuntimePolicy.ps1
+
+  cafe-shelf-core:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out editor test sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Audit the ShelfSuite F1 delivery contract
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests/CafeShelfSuiteDelivery.ps1
+      - name: Test editor protocol and revocation
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite All
+
+      - name: Build manual drop diagnostic and verify its runner
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfDropProbe.ps1 -BuildOnly
+
+      - name: Upload isolated drag-drop diagnostic
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: CafeShelf-drop-diagnostic
+          path: work-package/CafeShelfDropKit/
+          if-no-files-found: error
+          retention-days: 14
+
+  cafe-f1-inspection:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out native F1 inspection sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Check out pinned original ShelfSuite inspection inputs
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: MartinSantosT/ShelfSuite
+          ref: d4f186ba0b5c262c7559b80841132f5fd3884f3c
+          path: work-package/ShelfSuite
+          persist-credentials: false
+      - name: Audit the bundled native ShelfSuite F1 payload
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests/CafeShelfF1NativePayload.ps1 -UpstreamDirectory work-package/ShelfSuite
+
+      - name: Test native ShelfSuite F1 inspection
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1Compatibility -UpstreamDirectory work-package\ShelfSuite
+
+      - name: Test F1 authorization around Windows event dispatch
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX Tests\CafeLockPolicy.cpp /Fe:CafeLockPolicy.exe
+          if errorlevel 1 exit /b 1
+          CafeLockPolicy.exe
+
+      - name: Test compiled production F1 Settings and service entry guards
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeF1Entry.ps1
+
+      - name: Test native ShelfSuite F1 backup and recovery
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfTests.ps1 -Suite F1CompatibilityApply -UpstreamDirectory work-package\ShelfSuite
+
   cafe-lock-x64:
     runs-on: windows-2022
     timeout-minutes: 45
@@ -20,6 +118,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Check pull-request diff whitespace
+        shell: pwsh
+        env:
+          CAFE_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "$env:CAFE_DIFF_BASE" HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace errors in reviewed changes' }
 
       - name: Build Cafe Lock x64
         working-directory: Build
@@ -49,14 +155,6 @@ jobs:
             ForEach-Object { "$($_.Hash)  $([IO.Path]::GetRelativePath((Resolve-Path 'x64-Release'), $_.Path))" } |
             Set-Content x64-Release/SHA256SUMS.txt
 
-      - name: Test Cafe Lock policy
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          cl /nologo /EHsc /W4 /WX /DNOMINMAX Tests\CafeLockPolicy.cpp /Fe:CafeLockPolicy.exe
-          if errorlevel 1 exit /b 1
-          CafeLockPolicy.exe
-
       - name: Test password setup, verification, changes, persistence and launch policy
         shell: cmd
         run: |
@@ -85,9 +183,52 @@ jobs:
           path: work-package/ShelfSuite
           persist-credentials: false
 
-      - name: Test real ShelfSuite with a standard-user token
+      - name: Test native F1 UI with original loaded ShelfSuite
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX Tests\CafeF1PreviewProbe.cpp /Fe:CafeF1PreviewProbe.exe /link ole32.lib oleaut32.lib uiautomationcore.lib shell32.lib user32.lib /SUBSYSTEM:WINDOWS
+          if errorlevel 1 exit /b 1
+          rem Runtime test staging only; installer delivery is tested separately.
+          pwsh -NoProfile -Command "New-Item -ItemType Directory -Force x64-Release/Compatibility | Out-Null; Copy-Item ThirdParty/ShelfSuite/F1Compatibility x64-Release/Compatibility/ShelfSuiteF1 -Recurse"
+          pwsh -NoProfile -File Tests/CafeShelfTests.ps1 -Suite F1CompatibilityUi -UpstreamDirectory work-package/ShelfSuite
+
+      - name: Test Cafe Lock policy
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX Tests\CafeLockPolicy.cpp /Fe:CafeLockPolicy.exe
+          if errorlevel 1 exit /b 1
+          CafeLockPolicy.exe
+
+      - name: Apply the audited ShelfSuite adaptive-tab patch
         shell: pwsh
-        run: ./Tests/CafeShelfSuiteRunner.ps1 -ShelfSuiteDirectory work-package/ShelfSuite
+        run: |
+          $patch = Join-Path $env:GITHUB_WORKSPACE 'ThirdParty/ShelfSuite/patches/0001-cafe-lock-adaptive-tabs.patch'
+          git -C work-package/ShelfSuite apply --unidiff-zero --check $patch
+          if ($LASTEXITCODE -ne 0) { throw 'ShelfSuite adaptive-tab patch no longer applies to the pinned upstream revision' }
+          git -C work-package/ShelfSuite apply --unidiff-zero $patch
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply ShelfSuite adaptive-tab patch' }
+          $actual = @(git -C work-package/ShelfSuite diff --name-only | Sort-Object)
+          $expected = @(
+            'Shelf Suite/@Resources/ShelfEngine.lua',
+            'Shelf Suite/@Resources/Variables.inc',
+            'Shelf Suite/Shelf1/Shelf.ini',
+            'Shelf Suite/Shelf2/Shelf.ini',
+            'Shelf Suite/Shelf3/Shelf.ini'
+          )
+          $difference = Compare-Object -ReferenceObject $expected -DifferenceObject $actual
+          if ($difference) { throw "ShelfSuite patch changed unexpected paths: $($difference | Out-String)" }
+
+      - name: Test real ShelfSuite with a standard-user token
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          cl /nologo /EHsc /W4 /WX /DNOMINMAX /D_HAS_EXCEPTIONS=0 /utf-8 Tests\CafeShelfNameProbe.cpp Library\CafeShelf\Config.cpp /Fe:CafeShelfNameProbe.exe
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeShelfSuiteRunner.ps1 -ShelfSuiteDirectory work-package/ShelfSuite
 
       - name: Upload Cafe Lock x64 review build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

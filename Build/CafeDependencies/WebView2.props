@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <CafeWebViewRoot>$(MSBuildThisFileDirectory)..\..\work-package\dependencies\Microsoft.Web.WebView2.1.0.4258.31</CafeWebViewRoot>
+    <CafeWebViewArchitecture Condition="'$(Platform)'=='Win32'">x86</CafeWebViewArchitecture>
+    <CafeWebViewArchitecture Condition="'$(Platform)'=='x64'">x64</CafeWebViewArchitecture>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(CafeWebViewRoot)\build\native\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(CafeWebViewRoot)\build\native\$(CafeWebViewArchitecture)\WebView2LoaderStatic.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Target Name="CheckCafeWebViewSdk" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(CafeWebViewRoot)\build\native\include\WebView2.h')" Text="Run pwsh -NoProfile -File Build/CafeDependencies/Restore.ps1 from the repository root before building the ShelfSuite editor." />
+  </Target>
+</Project>

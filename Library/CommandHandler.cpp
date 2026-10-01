@@ -7,6 +7,7 @@
 
 #include "StdAfx.h"
 #include "CafeLock.h"
+#include "CafeShelf/Host.h"
 #include "../Common/PathUtil.h"
 #include "CommandHandler.h"
 #include "ConfigParser.h"
@@ -584,6 +585,7 @@ void CommandHandler::RunCommand(std::wstring command)
 void CommandHandler::RunFile(const WCHAR* file, const WCHAR* args)
 {
 	if (!CafeLock::AllowsLaunch(file, GetRainmeter().GetSkinPath())) return;
+	if (CafeShelf::TryOpen(file)) return;
 
 	SHELLEXECUTEINFO si = {sizeof(SHELLEXECUTEINFO)};
 	si.lpVerb = L"open";

@@ -1,0 +1,69 @@
+From: Rainmeter Cafe Lock
+Subject: [PATCH] adaptive tab widths for ShelfSuite v2.1
+
+Upstream base: MartinSantosT/ShelfSuite d4f186ba0b5c262c7559b80841132f5fd3884f3c
+Upstream copyright: Copyright (c) 2025 Martin Santos, MIT License.
+This patch changes only the shared tab layout and the three supplied shelf INIs.
+It never changes config.lua, icons, themes, or the upstream configurator.
+
+diff --git a/Shelf Suite/@Resources/ShelfEngine.lua b/Shelf Suite/@Resources/ShelfEngine.lua
+index 8d31580f..968e0460 100644
+--- a/Shelf Suite/@Resources/ShelfEngine.lua
++++ b/Shelf Suite/@Resources/ShelfEngine.lua
+@@ -88 +88,3 @@ function UpdateTabs()
+-    local tabWidth = SKIN:GetVariable("TabWidth")
++    local tabWidth = tonumber(SKIN:GetVariable("TabWidth")) or 85
++    local tabHorizontalPadding = tonumber(SKIN:GetVariable("TabHorizontalPadding")) or 12
++    local widgetBaseWidth = tonumber(SKIN:GetVariable("WidgetBaseWidth")) or 480
+@@ -97,0 +100 @@ function UpdateTabs()
++    local xPos = tonumber(paddingX) or 0
+@@ -106,2 +109,3 @@ function UpdateTabs()
+-        -- Calculate X position
+-        local xPos = tonumber(paddingX) + (i - 1) * (tonumber(tabWidth) + tonumber(tabSpacing))
++        SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "Text", tab.name)
++        SKIN:Bang("!UpdateMeter", "MeterTab" .. i .. "Text")
++        local width = math.max(tabWidth, SKIN:GetMeter("MeterTab" .. i .. "Text"):GetW() + (tabHorizontalPadding * 2))
+@@ -111 +115 @@ function UpdateTabs()
+-            "Rectangle 0,0," .. tabWidth .. "," .. tabHeight .. "," ..
++            "Rectangle 0,0," .. width .. "," .. tabHeight .. "," ..
+@@ -118 +121,0 @@ function UpdateTabs()
+-        SKIN:Bang("!SetOption", "MeterTab" .. i .. "Text", "Text", tab.name)
+@@ -121 +124 @@ function UpdateTabs()
+-            tostring(xPos + (tonumber(tabWidth) / 2)))
++            tostring(xPos + (width / 2)))
+@@ -127,0 +131 @@ function UpdateTabs()
++        xPos = xPos + width + (tonumber(tabSpacing) or 0)
+@@ -129,0 +134,7 @@ function UpdateTabs()
++    local widgetWidth = math.max(widgetBaseWidth, xPos - (tonumber(tabSpacing) or 0))
++    SKIN:Bang("!SetVariable", "WidgetWidth", tostring(widgetWidth))
++    SKIN:Bang("!SetOption", "MeterBackground", "Shape",
++        "Rectangle 0,0," .. widgetWidth .. "," .. SKIN:GetVariable("WidgetHeight") .. "," ..
++        cornerRadius .. " | Fill Color " .. SKIN:GetVariable("MainBackground") .. " | StrokeWidth 0")
++    SKIN:Bang("!SetOption", "MeterSettingsGear", "X", tostring(widgetWidth - 28))
++
+diff --git a/Shelf Suite/@Resources/Variables.inc b/Shelf Suite/@Resources/Variables.inc
+index a8445b28..0f9e2c4e 100644
+--- a/Shelf Suite/@Resources/Variables.inc
++++ b/Shelf Suite/@Resources/Variables.inc
+@@ -12,0 +13 @@ TabWidth=85
++TabHorizontalPadding=12
+@@ -25,0 +27 @@ WidgetWidth=480
++WidgetBaseWidth=480
+diff --git a/Shelf Suite/Shelf1/Shelf.ini b/Shelf Suite/Shelf1/Shelf.ini
+index e4ada824..b9121a40 100644
+--- a/Shelf Suite/Shelf1/Shelf.ini
++++ b/Shelf Suite/Shelf1/Shelf.ini
+@@ -3,0 +4 @@ AccurateText=1
++DynamicWindowSize=1
+diff --git a/Shelf Suite/Shelf2/Shelf.ini b/Shelf Suite/Shelf2/Shelf.ini
+index 89ab36ba..7024f708 100644
+--- a/Shelf Suite/Shelf2/Shelf.ini
++++ b/Shelf Suite/Shelf2/Shelf.ini
+@@ -3,0 +4 @@ AccurateText=1
++DynamicWindowSize=1
+diff --git a/Shelf Suite/Shelf3/Shelf.ini b/Shelf Suite/Shelf3/Shelf.ini
+index 60976c9f..47a504b3 100644
+--- a/Shelf Suite/Shelf3/Shelf.ini
++++ b/Shelf Suite/Shelf3/Shelf.ini
+@@ -3,0 +4 @@ AccurateText=1
++DynamicWindowSize=1

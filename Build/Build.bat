@@ -55,6 +55,10 @@ set MSBUILD="msbuild.exe" /nologo^
 if "%BUILD_TYPE%" == "languages" goto BUILD_LANGUAGES
 if "%BUILD_TYPE%" == "installer" goto BUILD_INSTALLER
 
+:: Verify the pinned SDK before compiling editor sources.
+pwsh -NoProfile -File "%~dp0CafeDependencies\Restore.ps1"
+if errorlevel 1 exit /b 1
+
 echo * Starting %BUILD_TYPE% build for %VERSION_FULL%
 
 :: Update Version.h

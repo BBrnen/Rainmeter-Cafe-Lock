@@ -9,11 +9,18 @@ build, not a claim that every third-party skin or Windows environment is tested.
 - Repository: https://github.com/MartinSantosT/ShelfSuite
 - Version: repository v2.1, revision `d4f186ba0b5c262c7559b80841132f5fd3884f3c`.
 - CI checks out that exact source, copies it to a disposable skin profile, and
-  loads all three shelves. It creates only a new `Shelf1/config.lua` containing
-  harmless test application paths, using ShelfSuite's normal configuration API.
-- The actual stock icon/tab/gear actions and Lua engine run unchanged. File
-  hashes verify that no existing ShelfSuite file was changed by the test.
+  loads all three shelves. It creates disposable `Shelf1` through `Shelf3`
+  `config.lua` files containing harmless test application paths and tab labels,
+  using ShelfSuite's normal configuration API.
+- The fixture applies the auditable F1 adaptive-tab patch before Rainmeter
+  starts. It changes only the shared tab-layout Lua, shared variables, and the
+  three supplied shelf INIs; it does not change `config.lua`, icons, themes, or
+  the configurator. File hashes verify that the patched fixture files stay
+  unchanged while the test runs.
 - ShelfSuite is not bundled in the installer or maintained as a separate fork.
+- F1 records a future same-skin compatibility ZIP in
+  `Docs/CafeLock-ShelfSuite-F1-Delivery.md`; this feature does not package,
+  deploy, or alter a real installation.
 
 `Tests/CafeShelfSuite.ps1` checks launcher clicks, tab content, hover and leave
 effects, Lua-driven meter changes, and application launches with a standard-user
@@ -49,6 +56,22 @@ arguments or an elevation flag, is exercised by the standard-user test, remains
 after upgrade, and is removed on uninstall. Startup occurs at Windows **sign-in**,
 not before a user signs in. Each Windows account has its own password/profile.
 
+## Native F1 compatibility coverage
+
+The Maintenance-only Settings action is tested with Rainmeter running and stock
+ShelfSuite skins loaded under a standard-user token. Tests cover Locked Mode and
+forged-command denial, exact preview/file list, Cancel, Lock Now before/during
+application, busy-target refusal, additional content-recognized shelves, unchanged
+loaded windows/positions, successful update, already-compatible no-op and customized
+file refusal. Native recovery tests cover interruption after moving an original,
+authorization revocation, competing files, verified backup leases, permissions and
+attributes. No product operation reads user `config.lua` or unrelated skin data.
+
+Installer tests compare exact bundled bytes, deny standard-user writes/deletion,
+and preserve disposable shelf, profile, icon, theme and backup sentinels through
+install, upgrade and uninstall. See `CafeLock-Deployment.md` for owner confirmation,
+normal reload and manual recovery. Hosted tests do not replace spare-PC acceptance.
+
 ## Checks requiring a disposable Windows desktop
 
 The automated runtime test sends Windows end-session queries for shutdown,
@@ -63,10 +86,13 @@ Before deployment, on a spare PC or VM:
    application-blocking prompt or abnormal delay. Repeat with a password dialog
    open, and cancel a shutdown once to confirm the application remains usable.
 3. Unlock, restart Windows, and confirm Maintenance Mode did not persist.
-4. In Maintenance Mode, open the actual ShelfSuite configurator in the intended
-   browser, save a normal configuration, and refresh the shelf. Confirm the
-   settings gear is blocked again after Lock Now. CI verifies launch dispatch,
-   not browser-specific file permissions or the configurator's save UI.
+4. In Maintenance Mode, open the integrated ShelfSuite editor through its gear,
+   Browse/drop a launcher and icon, save, and click the launcher. Confirm the
+   settings gear is blocked again after Lock Now. Repeat the full A1-A12 checklist
+   in `Docs/CafeLock-Usability-Verification.md`, including Lock Now during a picker
+   or import, theme/shelf operations and missing-Runtime optional setup on a
+   separate disposable VM. Real WebView harness tests cover saving, but do not
+   replace production standard-user desktop acceptance.
 
 These physical/session and browser checks must be recorded separately; they are
 not implied by a green CI run. Do not restart or sign out an active user's PC as

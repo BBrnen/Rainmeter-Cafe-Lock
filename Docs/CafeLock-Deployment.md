@@ -17,7 +17,11 @@ NSIS 3.11. GitHub Actions performs those steps and tests the result.
    ordinary Rainmeter settings and file associations are not overwritten.
 4. Right-click its tray icon, choose Unlock / Enter Maintenance Mode, and create
    the local password before customer use. In Maintenance, configure skins and
-   ShelfSuite using normal Rainmeter controls. ShelfSuite is not bundled or modified.
+   ShelfSuite using normal Rainmeter controls. Its settings gear opens the integrated
+   editor with Add/Edit, Browse/drop and automatic icons. ShelfSuite is not bundled;
+   the pinned installed skin engine and assets are retained. The F1 adaptive-tab
+   compatibility action is available under Manage > Settings after unlock. Setup
+   installs only its protected verification data; it never updates your shelves.
 5. Select Lock Now. Setup enables automatic startup for all Windows users via the
    shared Startup folder. It starts locked after sign-in, not before the login
    screen, and runs as that user. Configure the password in each cafe account before
@@ -47,6 +51,43 @@ restricted Windows deployment; it is not silently introduced by this installer.
 
 ## Updating and removing
 
+### Optional ShelfSuite F1 compatibility
+
+Use this once in the normal cafe Windows account after installing Cafe Lock.
+Unlock with the existing password, open Manage > Settings, and select
+**Apply ShelfSuite F1 compatibility**. It uses Rainmeter's configured skin path
+and the existing `Shelf Suite\@Resources` directory. Review the installation,
+complete file list and proposed backup location. Cancel makes no changes;
+choose Apply only when the preview is correct.
+
+Only exact approved ShelfSuite v2.1/F1 shared files and immediate `ShelfN\Shelf.ini`
+variants are accepted. Additional shelves are recognized by contents, not number.
+An unknown/customized, missing, linked or busy target refuses the entire update.
+Do not edit files to make them look recognized. An already-compatible installation
+requires no writes or new backup. No `config.lua`, icons, themes, launcher data,
+passwords or saved positions are read or modified by this action.
+
+Before changes, the action creates and verifies a timestamped sibling
+`Shelf Suite-F1-Backup-...` folder containing only changed original files and
+recovery instructions. Keep the whole folder. After success, reload the affected
+skins in Maintenance Mode or exit and restart Rainmeter normally. Restart is
+always locked. No automatic reload or skin repositioning occurs.
+
+If a failure reports **Recovered after failure**, originals were restored; keep
+the backup and resolve the reported cause before trying again. **Manual recovery
+required** means the operation is incomplete: do not reload affected shelves.
+Lock Now stops further writes, including automatic recovery. Close Rainmeter
+normally after authenticating if necessary. Read `RESTORE.txt` and `PHASE.txt`
+in the retained backup; phase entries record intentions, so check actual paths.
+Preserve any competing/unexpected target separately. Restore only the listed
+original files from the verified backup to their matching installation paths;
+never overwrite an unexpected file without keeping it. Holding originals and
+staged outputs are retained for inspection. Ask for help if the paths or hashes
+do not match the record. Recovery never involves `config.lua` or other data.
+
+The operation runs without elevation, scripts, downloads or security-policy
+changes. F2 grid snapping and the experimental PowerShell updater are not included.
+
 Close Cafe Lock using its normal Exit control in Maintenance before running Setup
 again. Setup refuses updates/uninstall while its Rainmeter.dll is in use; it does
 not force-close sessions. Upgrades preserve all profiles/passwords/skins. The
@@ -58,6 +99,34 @@ Uninstall via Windows Apps or Uninstall.exe. Only packaged files, the Cafe Lock
 Start menu/sign-in shortcuts and its own uninstall registration are removed. User profiles,
 passwords, skins and unknown files are retained. No recursive profile deletion or
 file-association takeover is performed.
+
+## Optional editor prerequisite
+
+Setup bundles Microsoft's signed Evergreen standalone x64 WebView2 installer for
+offline use. The build rejects mismatched SHA-256, file version or Authenticode
+signer. `Notices/WebView2-runtime-manifest.json` records those exact values; SDK
+and ShelfSuite license notices accompany the installed payload and source archive.
+The bundled payload reference is recorded separately from its installer version.
+Evergreen may subsequently update independently through Microsoft's updater.
+
+When machine-wide Runtime is detected, setup skips it. If missing, interactive setup asks
+whether to install it; No is the default. Silent setup leaves it alone unless
+the administrator explicitly supplies `/INSTALLWEBVIEW2=1`. After an attempted
+installation, setup checks the result and Runtime presence; failure returns 1603
+with an explanation while leaving Rainmeter installed. A restart-required result
+is accepted only when the Runtime is detected. Setup never launches Rainmeter
+elevated, and uninstall never removes the shared Microsoft Runtime.
+
+Opening the editor never downloads/installs a prerequisite. If Runtime is missing,
+existing launchers still work and the editor shows an actionable error. Check it
+in the intended standard-user cafe account: a Runtime installed only for a
+different Windows user may not be available there. The Windows installer uses
+Microsoft's documented registry views and standalone `/silent /install` flow.
+An administrator-only HKCU Runtime does not satisfy the shared prerequisite:
+https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution.
+
+Final editor acceptance and supported-config limits are recorded in
+`Docs/CafeLock-Usability-Verification.md`.
 
 ## Validation boundary
 

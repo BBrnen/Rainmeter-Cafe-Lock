@@ -21,9 +21,35 @@ foreach ($name in @('AppOne','AppTwo')) {
   New-Item -ItemType Directory "$root/$name" | Out-Null
   Copy-Item "$PSScriptRoot/../CafeLaunchProbe.exe" "$root/$name/Probe.exe"
 }
+$shortcutPath = Join-Path $root 'Original Café shortcut.lnk'
+$workingDirectory = Join-Path $root 'Shortcut working directory'
+New-Item -ItemType Directory -Path $workingDirectory | Out-Null
+$shell = New-Object -ComObject WScript.Shell
+$link = $shell.CreateShortcut($shortcutPath)
+$link.TargetPath = Join-Path $root 'AppOne\Probe.exe'
+$link.Arguments = '"argument with spaces" /fixture'
+$link.WorkingDirectory = $workingDirectory
+$link.IconLocation = (Join-Path $env:WINDIR 'System32/shell32.dll') + ',3'
+$link.Save()
+[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link)
+[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+$shortcutHash = (Get-FileHash -LiteralPath $shortcutPath -Algorithm SHA256).Hash
 # These are new user configuration files in the disposable profile, not edits
 # to the upstream skin, engine, themes, icons, or configurator.
-$appOne = "$root/AppOne/Probe.exe".Replace('\','/')
+# The pinned ASCII ShelfEngine runs through Rainmeter's legacy-codepage Lua
+# bridge. Encode non-ASCII literal bytes explicitly; writing UTF-8 verbatim
+# changes the path on that bridge. Storage must perform this same round-trip
+# check and reject characters the active bridge cannot represent.
+Add-Type @'
+using System.Runtime.InteropServices;
+public static class ShelfFixtureEncoding {
+ [DllImport("kernel32.dll")] public static extern uint GetACP();
+}
+'@
+[Text.Encoding]::RegisterProvider([Text.CodePagesEncodingProvider]::Instance)
+$legacyEncoding = [Text.Encoding]::GetEncoding([int][ShelfFixtureEncoding]::GetACP(), [Text.EncoderFallback]::ExceptionFallback, [Text.DecoderFallback]::ExceptionFallback)
+$pathBytes = $legacyEncoding.GetBytes($shortcutPath.Replace('\','/'))
+$appOne = -join ($pathBytes | ForEach-Object { if ($_ -ge 128) { '\' + $_.ToString('D3') } else { [char]$_ } })
 $appTwo = "$root/AppTwo/Probe.exe".Replace('\','/')
 @"
 ShelfConfig = {
@@ -34,6 +60,31 @@ ShelfConfig = {
   }
 }
 "@ | Set-Content "$skins/Shelf Suite/Shelf1/config.lua"
+@"
+ShelfConfig = {
+  defaultIcon = 'file.png',
+  tabs = {
+    { name = 'ONLINE', items = {} },
+    { name = 'OFFLINE', items = {} },
+    { name = 'INTERNET', items = {} }
+  }
+}
+"@ | Set-Content "$skins/Shelf Suite/Shelf2/config.lua"
+@"
+ShelfConfig = {
+  defaultIcon = 'file.png',
+  tabs = {
+    { name = 'SCHOOL/WORK', items = {} },
+    { name = 'SCHOOL/WORK 2', items = {} },
+    { name = 'SCHOOL/WORK 3', items = {} },
+    { name = 'SCHOOL/WORK 4', items = {} },
+    { name = 'SCHOOL/WORK 5', items = {} }
+  }
+}
+"@ | Set-Content "$skins/Shelf Suite/Shelf3/config.lua"
+& "$PSScriptRoot/../CafeShelfNameProbe.exe" "$skins/Shelf Suite/Shelf1/config.lua"
+if($LASTEXITCODE -ne 0){throw 'Native name encoding/rejection probe failed'}
+$configOriginals = @(Get-ChildItem "$skins/Shelf Suite" -Recurse -Filter config.lua -File | Get-FileHash -Algorithm SHA256)
 $ini = Join-Path $root 'Rainmeter.ini'
 @"
 [Rainmeter]
@@ -75,6 +126,20 @@ function Read-ShelfState {
   Wait-For { (Test-Path $snapshot) -and (Get-Item $snapshot).Length -gt 0 } 'stock Lua engine snapshot'
   return (Get-Content $snapshot -Raw)
 }
+function Read-ShelfLayout($target) {
+  $snapshot = Join-Path $root (([guid]::NewGuid()).ToString() + '.layout')
+  $luaPath = $snapshot.Replace('\','/')
+  $lua = "local f=assert(io.open('$luaPath','w')); local function v(n) local m=SKIN:GetMeter(n); return m and (tostring(m:GetX())..','..tostring(m:GetW())) or '' end; f:write(tostring(SKIN:GetW())..'|'..v('MeterSettingsGear')..'|'..v('MeterTab1Bg')..'|'..v('MeterTab1Text')..'|'..v('MeterTab2Bg')..'|'..v('MeterTab2Text')..'|'..v('MeterTab3Bg')..'|'..v('MeterTab3Text')..'|'..v('MeterTab4Bg')..'|'..v('MeterTab4Text')..'|'..v('MeterTab5Bg')..'|'..v('MeterTab5Text')); f:close()"
+  [LockNative]::Bang($target,"!CommandMeasure MeasureEngine `"$lua`"")
+  Wait-For { (Test-Path $snapshot) -and (Get-Item $snapshot).Length -gt 0 } 'ShelfSuite layout snapshot'
+  $parts = (Get-Content $snapshot -Raw).Trim().Split('|')
+  function Pair($value) { $pair=$value.Split(','); return [pscustomobject]@{ X=[int][double]$pair[0]; W=[int][double]$pair[1] } }
+  return [pscustomobject]@{
+    Width=[int][double]$parts[0]; Gear=(Pair $parts[1]); Tab1=(Pair $parts[2]); Text1=(Pair $parts[3]);
+    Tab2=(Pair $parts[4]); Text2=(Pair $parts[5]); Tab3=(Pair $parts[6]); Text3=(Pair $parts[7]);
+    Tab4=(Pair $parts[8]); Text4=(Pair $parts[9]); Tab5=(Pair $parts[10]); Text5=(Pair $parts[11])
+  }
+}
 function Assert-StandardLaunch($folder) {
   $probeFolder = if ($folder -eq 'HtmlHandler') { $HtmlProbeDirectory } else { "$root/$folder" }
   Wait-For { Test-Path "$probeFolder/launched.txt" } "$folder launch"
@@ -88,9 +153,19 @@ function Assert-GearBlocked {
   Start-Sleep -Milliseconds 800
   if (Test-Path $marker) { throw 'Locked ShelfSuite gear launched the configurator' }
   if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Gear bypassed maintenance authorization' }
+  if ([LockNative]::FindWindow('RainmeterCafeShelfEditor',$null) -ne [IntPtr]::Zero) { throw 'Locked gear opened the hosted editor' }
 }
 $process = $null
 try {
+  # Compare the meter's actual shell dispatch to opening the same shortcut.
+  Start-Process -FilePath $shortcutPath
+  Assert-StandardLaunch 'AppOne'
+  $shortcutBaseline = Get-Content -LiteralPath "$root/AppOne/launch-details.txt" -Raw
+  if (-not $shortcutBaseline.Contains("cwd=$workingDirectory") -or -not $shortcutBaseline.Contains('"argument with spaces" /fixture')) {
+    throw 'Windows shortcut baseline did not preserve fixture working directory and arguments'
+  }
+  Remove-Item -LiteralPath "$root/AppOne/launched.txt"
+  Remove-Item -LiteralPath "$root/AppOne/launch-details.txt"
   '<html>Association control</html>' | Set-Content "$root/control.html"
   Start-Process "$root/control.html"
   Assert-StandardLaunch 'HtmlHandler'
@@ -103,9 +178,58 @@ try {
     Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',$title) -ne [IntPtr]::Zero } "stock Shelf$shelf startup"
   }
   $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf1\Shelf.ini")
+  $shortWindow = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf2\Shelf.ini")
+  $longWindow = [LockNative]::FindWindow('RainmeterMeterWindow',"$skins\Shelf Suite\Shelf3\Shelf.ini")
   $tray = [LockNative]::FindWindow('RainmeterTrayClass',$null)
   $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
-  Wait-For { (Read-ShelfState) -eq '1|65|First app' } 'initial stock meters'
+  Wait-For { (Read-ShelfState) -eq "1|65|O'Brien <Cafe>" } 'initial literal name through real stock meters'
+  Write-Output 'PASS: native-saved quotes/HTML-like literal name survives loaded ShelfSuite/Rainmeter layers.'
+  $shortLayout = Read-ShelfLayout $shortWindow
+  Write-Output "ShelfSuite short layout: width=$($shortLayout.Width), gear=$($shortLayout.Gear.X), tab1=$($shortLayout.Tab1.X),$($shortLayout.Tab1.W), tab2=$($shortLayout.Tab2.X),$($shortLayout.Tab2.W)"
+  foreach ($index in 1..3) {
+    $tab = $shortLayout."Tab$index"; $text = $shortLayout."Text$index"
+    if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Short ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
+    if ($index -gt 1 -and $tab.X -ne ($shortLayout."Tab$($index - 1)".X + $shortLayout."Tab$($index - 1)".W + 10)) { throw "Short ShelfSuite tab $index did not retain the exact 10 px gap" }
+  }
+  if ($shortLayout.Width -ne 480 -or $shortLayout.Gear.X -ne ($shortLayout.Width - 35)) {
+    throw 'Short ShelfSuite tabs did not retain the 480 px shelf and aligned gear'
+  }
+  $longLayout = Read-ShelfLayout $longWindow
+  Write-Output "ShelfSuite long layout: width=$($longLayout.Width), gear=$($longLayout.Gear.X), tab1=$($longLayout.Tab1.X),$($longLayout.Tab1.W), text1=$($longLayout.Text1.W), tab2=$($longLayout.Tab2.X),$($longLayout.Tab2.W), tab4=$($longLayout.Tab4.X),$($longLayout.Tab4.W), tab5=$($longLayout.Tab5.X),$($longLayout.Tab5.W)"
+  foreach ($index in 1..5) {
+    $tab = $longLayout."Tab$index"; $text = $longLayout."Text$index"
+    if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Long ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
+    if ($index -gt 1 -and $tab.X -ne ($longLayout."Tab$($index - 1)".X + $longLayout."Tab$($index - 1)".W + 10)) { throw "Long ShelfSuite tab $index did not retain the exact 10 px gap" }
+  }
+  if ($longLayout.Width -ne [Math]::Max(480, $longLayout.Tab5.X + $longLayout.Tab5.W) -or $longLayout.Gear.X -ne ($longLayout.Width - 35)) {
+    throw 'Five long ShelfSuite tabs did not expand only to the final tab edge and keep the gear aligned'
+  }
+  $longConfigPath = "$skins/Shelf Suite/Shelf3/config.lua"
+  $longConfigBytes = [IO.File]::ReadAllBytes($longConfigPath)
+  @"
+ShelfConfig = {
+  defaultIcon = 'file.png',
+  tabs = {
+    { name = 'ONE', items = {} },
+    { name = 'TWO', items = {} },
+    { name = 'THREE', items = {} }
+  }
+}
+"@ | Set-Content $longConfigPath
+  [LockNative]::Bang($control,'!Refresh "Shelf Suite\Shelf3"')
+  Wait-For { (Read-ShelfLayout $longWindow).Width -eq 480 } 'ShelfSuite long-to-short refresh'
+  $resetLayout = Read-ShelfLayout $longWindow
+  if ($resetLayout.Width -ne 480 -or $resetLayout.Gear.X -ne ($resetLayout.Width - 35)) {
+    throw 'ShelfSuite did not return from an expanded long-tab row to its immutable 480 px base width'
+  }
+  foreach ($index in 1..3) {
+    $tab = $resetLayout."Tab$index"; $text = $resetLayout."Text$index"
+    if ($tab.W -ne [Math]::Max(85, $text.W + 24)) { throw "Reset ShelfSuite tab $index did not use the exact minimum-or-measured-plus-24 width" }
+    if ($index -gt 1 -and $tab.X -ne ($resetLayout."Tab$($index - 1)".X + $resetLayout."Tab$($index - 1)".W + 10)) { throw "Reset ShelfSuite tab $index did not retain the exact 10 px gap" }
+  }
+  [IO.File]::WriteAllBytes($longConfigPath, $longConfigBytes)
+  [LockNative]::Bang($control,'!Refresh "Shelf Suite\Shelf3"')
+  Write-Output 'PASS: ShelfSuite tab layout measures text, preserves the short 480 px layout, prevents overlap, and expands only when five long tabs require it.'
   $before = Position $window
   # Preserve each stock action, then observe its result in the same UI callback.
   # On a hosted desktop WM_MOUSELEAVE can arrive before an external snapshot.
@@ -131,6 +255,13 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   if ((Get-Content "$root/hover.event" -Raw) -ne '62') { throw 'Stock hover action did not raise the icon' }
   Click-Shelf 55 85
   Assert-StandardLaunch 'AppOne'
+  if ((Get-Content -LiteralPath "$root/AppOne/launch-details.txt" -Raw) -ne $shortcutBaseline) {
+    throw 'ShelfSuite shortcut launch differs from opening the same shortcut in Windows'
+  }
+  if ((Get-FileHash -LiteralPath $shortcutPath -Algorithm SHA256).Hash -ne $shortcutHash) {
+    throw 'Shortcut launch changed original shortcut bytes'
+  }
+  Write-Output 'PASS: real locked ShelfSuite meter preserves original shortcut arguments, working directory and standard-user token.'
   [void][LockNative]::SetCursorPos(900,700)
   [void][LockNative]::Send($window,0x2A3,0,0)
   Wait-For { Test-Path "$root/leave.event" } 'stock mouse-leave callback'
@@ -153,21 +284,39 @@ SKIN:Bang('!UpdateMeter','MeterIcon1');
   Submit-Password $dialog $password $password
   Wait-For { -not [LockNative]::IsWindow($dialog) } 'ShelfSuite maintenance password creation'
   Click-Shelf 452 20
+  [void](Read-ShelfState)
+  if (Test-Path "$HtmlProbeDirectory/launched.txt") { throw 'Maintenance gear escaped to an external HTML handler instead of the guarded editor' }
+  Wait-For {
+    [LockNative]::FindWindow('RainmeterCafeShelfEditor',$null) -ne [IntPtr]::Zero -or
+    [LockNative]::FindWindow('#32770','Rainmeter Cafe Lock - ShelfSuite') -ne [IntPtr]::Zero
+  } 'native editor or actionable runtime failure'
+  $runtimeError = [LockNative]::FindWindow('#32770','Rainmeter Cafe Lock - ShelfSuite')
+  if ($runtimeError -ne [IntPtr]::Zero) {
+    [void][LockNative]::Send($runtimeError,0x10,0,0)
+    Write-Output 'NOTE: native runtime error shown; this runner has not verified the hosted browser UI.'
+  }
+  # Ordinary HTML must still use its Windows association through Rainmeter.
+  [LockNative]::Bang($control,('["' + $root + '\control.html"]'))
   Assert-StandardLaunch 'HtmlHandler'
+  Remove-Item -LiteralPath "$HtmlProbeDirectory/launched.txt"
   [LockNative]::Bang($control,'!Move 160 160 "Shelf Suite\Shelf1"')
   Wait-For { (Position $window) -eq '160,160' } 'ShelfSuite maintenance movement'
   [void][LockNative]::Send($tray,0x111,4091,0)
+  Wait-For { [LockNative]::FindWindow('RainmeterCafeShelfEditor',$null) -eq [IntPtr]::Zero } 'Lock Now closes hosted editor'
   Assert-GearBlocked
   [LockNative]::Bang($control,'!Move 260 260 "Shelf Suite\Shelf1"')
   [void](Read-ShelfState)
   if ((Position $window) -ne '160,160') { throw 'Relocked ShelfSuite moved' }
   foreach ($original in $originals) {
-    if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "Upstream ShelfSuite file changed: $($original.Path)" }
+    if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "Patched ShelfSuite fixture file changed during test: $($original.Path)" }
+  }
+  foreach ($original in $configOriginals) {
+    if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw "ShelfSuite user configuration changed during test: $($original.Path)" }
   }
   foreach ($file in Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.ini','.log' }) {
     if ((Get-Content -LiteralPath $file.FullName -Raw).Contains($password)) { throw 'Plaintext password in configuration/logs' }
   }
-  Write-Output "PASS: ShelfSuite configurator dispatch allowed after password unlock, remains non-elevated, blocked again by Lock Now; all upstream files unchanged. Revision: $revision"
+  Write-Output "PASS: ShelfSuite gear uses native host after password unlock; ordinary HTML still launches non-elevated; Lock Now closes the host and blocks the gear; all patched fixture files and user configuration remained unchanged during the test. Revision: $revision"
 } catch {
   $lastState = Get-ChildItem $root -Filter '*.state' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($lastState) { Write-Output "Last ShelfSuite state: $(Get-Content $lastState.FullName -Raw)" }

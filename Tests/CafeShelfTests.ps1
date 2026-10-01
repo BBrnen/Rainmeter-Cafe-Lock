@@ -1,0 +1,245 @@
+param(
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'F1Compatibility', 'F1CompatibilityApply', 'F1CompatibilityUi', 'All')]
+    [string]$Suite = 'Protocol',
+    [string]$UpstreamDirectory
+)
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$repo = Split-Path $PSScriptRoot -Parent
+if ($Suite -eq 'F1CompatibilityUi') {
+    & "$repo/RunAsStandard.exe" 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -File "$repo/Tests/CafeShelfF1Ui.ps1" -UpstreamDirectory $UpstreamDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'F1 native UI verification failed.' }
+    return
+}
+if ($UpstreamDirectory) { $UpstreamDirectory = (Resolve-Path -LiteralPath $UpstreamDirectory).Path }
+$output = Join-Path $repo 'work-package/CafeShelfTests'
+New-Item -ItemType Directory -Force -Path $output | Out-Null
+Push-Location $output
+try {
+    $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage') } else { @($Suite) }
+    if ($Suite -in @('F1Compatibility', 'F1CompatibilityApply')) {
+        if (-not $UpstreamDirectory) { throw 'F1Compatibility requires the disposable unchanged pinned ShelfSuite checkout.' }
+        $upstream = (Resolve-Path $UpstreamDirectory).Path
+        $payload = Join-Path $repo 'ThirdParty/ShelfSuite/F1Compatibility'
+        $fixtureScript = Join-Path $repo 'Tests/CafeShelfF1CompatibilityFixtures.ps1'
+        $compilerArgs = @('/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
+            "$repo/Tests/CafeShelfF1Compatibility.cpp", "$repo/Library/CafeShelf/F1Compatibility.cpp",
+            '/Fe:CafeShelfF1Compatibility.exe', '/link', 'bcrypt.lib', 'advapi32.lib')
+        if ($Suite -eq 'F1CompatibilityApply') { $compilerArgs = @('/DCAFE_F1_TESTING') + $compilerArgs }
+        & cl.exe @compilerArgs
+        if ($LASTEXITCODE -ne 0) { throw 'CafeShelf F1Compatibility compilation failed' }
+        function New-F1Fixture([string]$Name) {
+            return (& $fixtureScript -Directory (Join-Path $output $Name) -UpstreamDirectory $upstream -PayloadDirectory $payload)
+        }
+        $root = New-F1Fixture ('F1-' + [guid]::NewGuid().ToString('N'))
+        $config = [IO.File]::Open((Join-Path $root 'Shelf1/config.lua'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $icon = [IO.File]::Open((Join-Path $root '@Resources/Icons/sentinel.png'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $theme = [IO.File]::Open((Join-Path $root '@Resources/Themes/sentinel.inc'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        try {
+            & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload preview 5 2
+            if ($LASTEXITCODE -ne 0) { throw 'Mixed ShelfN recognition failed' }
+        } finally { $theme.Dispose(); $icon.Dispose(); $config.Dispose() }
+        function Set-F1Fixture([string]$FixtureRoot) {
+            foreach ($relative in @('@Resources/ShelfEngine.lua', '@Resources/Variables.inc')) {
+                Copy-Item -LiteralPath (Join-Path $payload ('payload/' + $relative)) -Destination (Join-Path $FixtureRoot $relative) -Force
+            }
+            foreach ($ini in Get-ChildItem -LiteralPath $FixtureRoot -Directory -Filter 'Shelf*' | ForEach-Object { Join-Path $_.FullName 'Shelf.ini' }) {
+                $bytes = [IO.File]::ReadAllBytes($ini)
+                $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
+                $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+                if (-not $text.Contains("DynamicWindowSize=1$newline")) {
+                    $text = $text.Replace("AccurateText=1$newline", "AccurateText=1${newline}DynamicWindowSize=1${newline}")
+                }
+                [IO.File]::WriteAllBytes($ini, [Text.UTF8Encoding]::new($false).GetBytes($text))
+            }
+        }
+        if ($Suite -eq 'F1CompatibilityApply') {
+            foreach ($scenario in @('apply-success', 'apply-backup-lease', 'apply-denied', 'apply-busy', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop', 'apply-abort-gap', 'apply-revoke-gap', 'apply-session-revoke-gap', 'apply-compete-gap', 'apply-compete-recovery', 'apply-crash-gap')) {
+                $applyRoot = New-F1Fixture ('F1-apply-' + [guid]::NewGuid().ToString('N'))
+                if ($scenario -eq 'apply-noop') { Set-F1Fixture $applyRoot }
+                & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $applyRoot) $payload $scenario 0 0
+                if ($scenario -eq 'apply-crash-gap') {
+                    if ($LASTEXITCODE -ne 73) { throw 'Interruption probe did not terminate at the original-move boundary' }
+                    $backup = @(Get-ChildItem -LiteralPath (Split-Path -Parent $applyRoot) -Directory -Filter 'Shelf Suite-F1-Backup-*')
+                    if ($backup.Count -ne 1) { throw 'Crash did not retain one recovery location' }
+                    if (-not (Test-Path -LiteralPath (Join-Path $backup[0].FullName 'RESTORE.txt')) -or -not (Test-Path -LiteralPath (Join-Path $backup[0].FullName 'PHASE.txt'))) { throw 'Crash recovery information missing' }
+                    $holding = @(Get-ChildItem -LiteralPath (Join-Path $backup[0].FullName 'Holding') -Recurse -File -Force)
+                    if ($holding.Count -ne 1) { throw 'Crash fixture should have exactly one original in holding' }
+                    $relative = [IO.Path]::GetRelativePath((Join-Path $backup[0].FullName 'Holding'), $holding[0].FullName)
+                    if (Test-Path -LiteralPath (Join-Path $applyRoot $relative)) { throw 'Crash probe unexpectedly placed replacement' }
+                    if ((Get-FileHash -LiteralPath $holding[0].FullName).Hash -ne (Get-FileHash -LiteralPath (Join-Path $backup[0].FullName $relative)).Hash) { throw 'Crash holding and verified backup disagree' }
+                    Write-Host 'PASS real process interruption retained flushed recovery records, backup and original without placing replacement'
+                    continue
+                }
+                if ($LASTEXITCODE -ne 0) { throw "F1 compatibility application case failed: $scenario" }
+            }
+            if ($env:GITHUB_ACTIONS -eq 'true') {
+                & cl.exe /nologo /EHsc /W4 /WX "$repo/Tests/RunAsStandard.cpp" /Fe:RunAsStandardF1.exe /link Advapi32.lib Shlwapi.lib
+                if ($LASTEXITCODE -ne 0) { throw 'F1 standard-user helper compilation failed' }
+                $standardRoot = New-F1Fixture ('F1-standard-' + [guid]::NewGuid().ToString('N'))
+                # Only this disposable fixture: emulate Documents' owner-writable ACL,
+                # rather than the elevated runner checkout's Administrators-only writes.
+                $standardSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                & icacls.exe (Split-Path -Parent $standardRoot) /grant ('*' + $standardSid + ':(OI)(CI)M') /T | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Could not prepare owner-writable standard-user F1 fixture' }
+                & ./RunAsStandardF1.exe (Join-Path $output 'CafeShelfF1Compatibility.exe') (Split-Path -Parent $standardRoot) $payload apply-permissions-refused 0 0
+                if ($LASTEXITCODE -ne 0) { throw 'Different-owner permission-expansion refusal failed' }
+                $ownedDirectory = Join-Path $output ('F1-owner-' + [guid]::NewGuid().ToString('N'))
+                New-Item -ItemType Directory -Path $ownedDirectory | Out-Null
+                & icacls.exe $ownedDirectory /grant ('*' + $standardSid + ':(OI)(CI)M') | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Could not prepare standard-user-owned fixture directory' }
+                & ./RunAsStandardF1.exe 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -File $fixtureScript -Directory $ownedDirectory -UpstreamDirectory $upstream -PayloadDirectory $payload -StandardApplyExecutable (Join-Path $output 'CafeShelfF1Compatibility.exe')
+                if ($LASTEXITCODE -ne 0) { throw 'Standard-user-owned F1 update/permissions verification failed' }
+            }
+            return
+        }
+        Set-F1Fixture $root
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload already 0 7
+        if ($LASTEXITCODE -ne 0) { throw 'Manually F1-updated fixture was not a no-op' }
+        $partial = New-F1Fixture ('F1-partial-' + [guid]::NewGuid().ToString('N'))
+        Set-F1Fixture $partial
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/Variables.inc') -Destination (Join-Path $partial '@Resources/Variables.inc') -Force
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $partial) $payload preview 1 6
+        if ($LASTEXITCODE -ne 0) { throw 'Known partial F1 fixture was not recognized' }
+        $before = @(Get-ChildItem -LiteralPath $root -Recurse -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { $_.Path + '|' + $_.Hash })
+        New-Item -ItemType Directory -Path (Join-Path $root 'Shelf99') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $root 'Shelf99/Shelf.ini'), '[Rainmeter]', [Text.UTF8Encoding]::new($false))
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Unexpected additional shelf was accepted' }
+        $after = @(Get-ChildItem -LiteralPath $root -Recurse -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { $_.Path + '|' + $_.Hash })
+        if (@(Compare-Object $before $after | Where-Object { $_.InputObject -notmatch 'Shelf99\\Shelf.ini\|' }).Count) { throw 'Refusal changed an existing fixture file' }
+        $empty = Join-Path $output ('F1-empty-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path (Join-Path $empty 'Skins/Shelf Suite/@Resources') -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/ShelfEngine.lua') -Destination (Join-Path $empty 'Skins/Shelf Suite/@Resources/ShelfEngine.lua')
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/Variables.inc') -Destination (Join-Path $empty 'Skins/Shelf Suite/@Resources/Variables.inc')
+        & ./CafeShelfF1Compatibility.exe (Join-Path $empty 'Skins') $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'No-shelf fixture was accepted' }
+        $allRoot = & $fixtureScript -Directory (Join-Path $output ('F1-all-' + [guid]::NewGuid().ToString('N'))) -UpstreamDirectory $upstream -PayloadDirectory $payload -AllVariants
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $allRoot) $payload preview 34 32
+        if ($LASTEXITCODE -ne 0) { throw 'Complete approved INI catalog recognition failed' }
+        $linkedRoot = New-F1Fixture ('F1-linked-' + [guid]::NewGuid().ToString('N'))
+        $linkedParent = Split-Path -Parent (Split-Path -Parent $linkedRoot)
+        $junction = Join-Path $output ('F1-junction-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Junction -Path $junction -Target $linkedParent | Out-Null
+        & ./CafeShelfF1Compatibility.exe (Join-Path $junction 'Skins') $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Redirected ancestor was accepted' }
+        New-Item -ItemType HardLink -Path (Join-Path (Split-Path -Parent $linkedRoot) 'linked-engine') -Target (Join-Path $linkedRoot '@Resources/ShelfEngine.lua') | Out-Null
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $linkedRoot) $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Hard-linked target was accepted' }
+        $missingRoot = New-F1Fixture ('F1-missing-' + [guid]::NewGuid().ToString('N'))
+        Remove-Item -LiteralPath (Join-Path $missingRoot 'Shelf2/Shelf.ini')
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $missingRoot) $payload refused 0 0 'Shelf2\Shelf.ini'
+        if ($LASTEXITCODE -ne 0) { throw 'Missing-target refusal did not identify the affected relative file' }
+        $tamperedRoot = New-F1Fixture ('F1-tampered-' + [guid]::NewGuid().ToString('N'))
+        $tamperedBundle = Join-Path $output ('F1-bundle-' + [guid]::NewGuid().ToString('N'))
+        Copy-Item -LiteralPath $payload -Destination $tamperedBundle -Recurse
+        $manifestPath = Join-Path $tamperedBundle 'manifest.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $oldHash = (Get-FileHash -LiteralPath (Join-Path $tamperedRoot 'Shelf1/Shelf.ini') -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText((Join-Path $tamperedRoot 'Shelf1/Shelf.ini'), 'customized fixture', [Text.UTF8Encoding]::new($false))
+        $newHash = (Get-FileHash -LiteralPath (Join-Path $tamperedRoot 'Shelf1/Shelf.ini') -Algorithm SHA256).Hash.ToLowerInvariant()
+        ($manifest.Recognition | Where-Object { $_.InputHash -eq $oldHash }).InputHash = $newHash
+        [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $tamperedRoot) $tamperedBundle refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Altered recognition manifest was trusted' }
+        Write-Host 'PASS F1Compatibility: recognized Shelf1, Shelf2, Shelf3, Shelf4, and Shelf27 by complete contents; refused unknown Shelf99 and no-shelf fixtures without reading locked config, icon, or theme sentinels.'
+        return
+    }
+    if ($tests -contains 'Selection' -or $tests -contains 'Host' -or $tests -contains 'Browser') {
+        & "$repo/Build/CafeDependencies/Restore.ps1"
+        $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'
+    }
+    $failed = @()
+    foreach ($test in $tests) {
+        $source = @{
+            Protocol = 'CafeShelfCore.cpp'
+            HostPolicy = 'CafeShelfHostPolicy.cpp'
+            Controller = 'CafeShelfController.cpp'
+            Selection = 'CafeShelfSelection.cpp'
+            Host = 'CafeShelfHostHarness.cpp'
+            Browser = 'CafeShelfBrowser.cpp'
+            Launcher = 'CafeShelfLauncher.cpp'
+            Icons = 'CafeShelfIcons.cpp'
+            Config = 'CafeShelfConfig.cpp'
+            Storage = 'CafeShelfStorage.cpp'
+        }[$test]
+        $compilerArgs = @(
+            '/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/D_HAS_EXCEPTIONS=0', '/DWIN32_LEAN_AND_MEAN', '/DWINVER=0x0601', '/D_WIN32_WINNT=0x0601', '/D_WIN32_IE=0x0601', '/GR-', '/GL', '/utf-8',
+            "$repo/Tests/$source",
+            "$repo/Library/CafeShelf/Session.cpp",
+            "$repo/Library/CafeShelf/Protocol.cpp",
+            "$repo/Library/CafeShelf/HostPolicy.cpp",
+            "$repo/Library/CafeShelf/Controller.cpp",
+            "/Fe:CafeShelf$test.exe"
+        )
+        $arguments = @()
+        $fixtureHashes = @()
+        if ($test -eq 'Config') { $compilerArgs += "$repo/Library/CafeShelf/Config.cpp" }
+        if ($test -eq 'Storage') {
+            $fixtures = Join-Path $output ('Storage-' + [guid]::NewGuid().ToString('N'))
+            & "$repo/Tests/CafeShelfStorageFixtures.ps1" -Directory $fixtures
+            $arguments = @($fixtures)
+            $compilerArgs += @("$repo/Library/CafeShelf/Storage.cpp", "$repo/Library/CafeShelf/Config.cpp", "$repo/Library/CafeShelf/Icons.cpp", '/link', 'advapi32.lib', 'ole32.lib', 'shell32.lib', 'shlwapi.lib', 'windowscodecs.lib', 'gdi32.lib', 'user32.lib', 'uuid.lib', 'bcrypt.lib')
+        }
+        if ($test -eq 'Launcher' -or $test -eq 'Icons') {
+            $fixtures = Join-Path $output ('Launcher-' + [guid]::NewGuid().ToString('N'))
+            & "$repo/Tests/CafeShelfFixtures.ps1" -Directory $fixtures
+            $fixtureHashes = @(Get-ChildItem -LiteralPath $fixtures -File -Recurse | Get-FileHash -Algorithm SHA256)
+            $arguments = @($fixtures)
+            if ($test -eq 'Icons') { $compilerArgs += "$repo/Library/CafeShelf/Icons.cpp" }
+            $compilerArgs += @("$repo/Library/CafeShelf/Launcher.cpp", '/link', 'version.lib', 'ole32.lib', 'shell32.lib', 'uuid.lib', 'windowscodecs.lib', 'gdi32.lib', 'user32.lib', 'shlwapi.lib')
+        }
+        if ($test -eq 'Selection') {
+            $compilerArgs += @(
+                "/I$sdk/build/native/include", "$repo/Library/CafeShelf/Selection.cpp",
+                '/link', 'ole32.lib', 'shell32.lib', 'uuid.lib', 'user32.lib'
+            )
+            $fixtures = Join-Path $output ("Selection-" + [guid]::NewGuid().ToString('N'))
+            $folder = Join-Path $fixtures 'Folder with spaces'
+            New-Item -ItemType Directory -Path $folder | Out-Null
+            $shortcut = Join-Path $fixtures 'Original shortcut.lnk'
+            $shell = New-Object -ComObject WScript.Shell
+            $link = $shell.CreateShortcut($shortcut)
+            $link.TargetPath = Join-Path $env:WINDIR 'System32/notepad.exe'
+            $link.WorkingDirectory = $folder
+            $link.Save()
+            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link)
+            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+            $arguments = @($shortcut, $folder)
+        }
+        if ($test -eq 'Host' -or $test -eq 'Browser') {
+            if ($test -eq 'Browser') {
+                if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Real browser integration requires a disposable CI desktop.' }
+                & rc.exe /nologo "/I$repo/Library" /foCafeShelfEditor.res "$repo/Library/CafeShelf/EditorResources.rc"
+                if ($LASTEXITCODE -ne 0) { throw 'Embedded editor resource compilation failed' }
+                $compilerArgs += 'CafeShelfEditor.res'
+                $fixtures = Join-Path $output ('Browser-' + [guid]::NewGuid().ToString('N'))
+                & "$repo/Tests/CafeShelfStorageFixtures.ps1" -Directory $fixtures
+                $arguments = @($fixtures)
+            }
+            $compilerArgs += @(
+                '/MT', "/I$sdk/build/native/include",
+                "$repo/Library/CafeShelf/Host.cpp", "$repo/Library/CafeShelf/Selection.cpp",
+                "$repo/Library/CafeShelf/Launcher.cpp", "$repo/Library/CafeShelf/Icons.cpp",
+                "$repo/Library/CafeShelf/Config.cpp", "$repo/Library/CafeShelf/Storage.cpp",
+                '/link', "$sdk/build/native/x64/WebView2LoaderStatic.lib",
+                'advapi32.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib', 'shell32.lib', 'shlwapi.lib', 'uuid.lib', 'version.lib', 'windowscodecs.lib', 'gdi32.lib', 'bcrypt.lib'
+            )
+        }
+        & cl.exe @compilerArgs
+        if ($LASTEXITCODE -ne 0) { throw "CafeShelf $test compilation failed" }
+        & "./CafeShelf$test.exe" @arguments
+        if ($LASTEXITCODE -ne 0) { $failed += $test }
+        if ($test -eq 'Launcher' -or $test -eq 'Icons') {
+            foreach ($original in $fixtureHashes) {
+                if ((Get-FileHash -LiteralPath $original.Path -Algorithm SHA256).Hash -ne $original.Hash) { throw 'Launcher inspection changed a fixture' }
+            }
+            if (Get-ChildItem -LiteralPath $fixtures -Recurse -Filter 'launcher-was-executed.txt') { throw 'Launcher inspection executed a fixture' }
+            if (Test-Path -LiteralPath (Join-Path $output 'launcher-was-executed.txt')) { throw 'Launcher inspection executed a fixture' }
+            Write-Host 'PASS inspection did not change fixture bytes or launch fixture applications'
+        }
+    }
+    if ($failed.Count -gt 0) { throw "CafeShelf assertions failed: $($failed -join ', ')" }
+} finally {
+    Pop-Location
+}

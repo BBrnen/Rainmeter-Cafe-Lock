@@ -1,0 +1,243 @@
+#include "../Library/CafeShelf/Storage.h"
+#include <windows.h>
+#include <sddl.h>
+#include <objbase.h>
+#include <fstream>
+#include <iostream>
+using namespace CafeShelf;
+namespace {
+int checks=0, failures=0;
+void Check(const char* name,bool ok) { ++checks; if(!ok)++failures; std::cout<<(ok?"PASS ":"FAIL ")<<name<<'\n'; }
+std::string Read(const std::wstring& path) {
+	HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+	if(file==INVALID_HANDLE_VALUE)return {};
+	LARGE_INTEGER size={}; std::string bytes; DWORD read=0;
+	if(GetFileSizeEx(file,&size) && size.QuadPart>=0 && size.QuadPart<=4*1024*1024) {
+		bytes.resize(static_cast<size_t>(size.QuadPart));
+		if(!ReadFile(file,bytes.empty()?nullptr:&bytes[0],static_cast<DWORD>(bytes.size()),&read,nullptr) || read!=bytes.size())bytes.clear();
+	}
+	CloseHandle(file);return bytes;
+}
+void Write(const std::wstring& path,const std::string& bytes) {
+	std::ofstream out(path,std::ios::binary); out.write(bytes.data(),static_cast<std::streamsize>(bytes.size()));
+}
+}
+int wmain(int argc,wchar_t** argv) {
+	if(argc!=2 || FAILED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED)))return 2;
+	const std::wstring root=argv[1], shelf=root+L"\\Shelf1", icons=root+L"\\@Resources\\Icons";
+	Storage storage(root);
+	auto discovered=storage.Discover();
+	Check("recognized shelf discovered with real meter capacities", discovered.ok && discovered.value.size()==1 &&
+		discovered.value[0].tabCapacity==5 && discovered.value[0].itemCapacity==18);
+	auto loaded=storage.Load(L"Shelf1");
+	Check("existing literal config loads with snapshot version", loaded.ok && !loaded.value.version.empty());
+	// Mixed real installations: an abandoned/busy shelf must not hide healthy ones.
+	const auto discoveryIni=Read(shelf+L"\\Shelf.ini"), discoveryConfig=Read(shelf+L"\\config.lua");
+	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf90",L"Shelf91",L"Shelf92",L"Shelf93",L"Shelf94",L"Shelf95"})
+		CreateDirectoryW((root+L"\\"+id).c_str(),nullptr);
+	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf92",L"Shelf93",L"Shelf94"})
+	{
+		Write(root+L"\\"+id+L"\\Shelf.ini",discoveryIni);
+		if(std::wstring(id)!=L"Shelf94")Write(root+L"\\"+id+L"\\config.lua",discoveryConfig);
+	}
+	Write(root+L"\\Shelf91\\Shelf.ini","[Rainmeter]\n; unsupported layout\n");
+	Write(root+L"\\Shelf93\\config.lua","ShelfConfig=os.execute('PRIVATE_SENTINEL')");
+	Write(root+L"\\Shelf95\\Shelf.ini",discoveryIni);
+	PSECURITY_DESCRIPTOR deniedRead=nullptr;
+	const bool aclReady=ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(D;;FR;;;WD)(A;;FA;;;WD)",SDDL_REVISION_1,&deniedRead,nullptr)!=FALSE;
+	Check("unreadable fixture denies actual Windows read access",aclReady && SetFileSecurityW((root+L"\\Shelf95\\Shelf.ini").c_str(),DACL_SECURITY_INFORMATION,deniedRead)!=FALSE && Read(root+L"\\Shelf95\\Shelf.ini").empty());
+	if(deniedRead)LocalFree(deniedRead);
+	HANDLE discoveryBusy=CreateFileW((root+L"\\Shelf92\\Shelf.ini").c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,0,nullptr);
+	Check("busy discovery fixture is genuinely locked",discoveryBusy!=INVALID_HANDLE_VALUE);
+	auto mixed=storage.Discover();
+	Check("broken shelves do not discard healthy discovery",mixed.ok && mixed.value.size()==5);
+	Check("missing INI warning identifies shelf and file",mixed.message.find(L"Shelf90\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"Windows error 2")!=std::wstring::npos);
+	Check("malformed INI warning identifies shelf and reason",mixed.message.find(L"Shelf91\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"engine")!=std::wstring::npos);
+	Check("locked INI warning identifies Windows sharing error",mixed.message.find(L"Shelf92\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"Windows error 32")!=std::wstring::npos);
+	Check("unreadable INI warning identifies Windows access denial",mixed.message.find(L"Shelf95\\Shelf.ini")!=std::wstring::npos && mixed.message.find(L"Windows error 5")!=std::wstring::npos);
+	Check("healthy three shelves load beside broken neighbors",storage.Load(L"Shelf1").ok && storage.Load(L"Shelf2").ok && storage.Load(L"Shelf3").ok);
+	auto malformed=storage.Load(L"Shelf93"), missing=storage.Load(L"Shelf94");
+	Check("malformed Lua identifies file without exposing contents",!malformed.ok && malformed.message.find(L"Shelf93\\config.lua")!=std::wstring::npos && malformed.message.find(L"PRIVATE_SENTINEL")==std::wstring::npos);
+	Check("missing config identifies fallback file and Windows error",!missing.ok && missing.message.find(L"Shelf94\\config.example.lua")!=std::wstring::npos && missing.message.find(L"Windows error 2")!=std::wstring::npos);
+	Check("discovery does not rewrite healthy config bytes",Read(shelf+L"\\config.lua")==discoveryConfig && Read(root+L"\\Shelf2\\config.lua")==discoveryConfig);
+	HANDLE configBusy=CreateFileW((root+L"\\Shelf2\\config.lua").c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,0,nullptr);
+	const auto busyConfig=storage.Load(L"Shelf2");
+	Check("locked config is local and healthy neighbor still loads",configBusy!=INVALID_HANDLE_VALUE && !busyConfig.ok && busyConfig.message.find(L"Shelf2\\config.lua")!=std::wstring::npos && busyConfig.message.find(L"Windows error 32")!=std::wstring::npos && storage.Load(L"Shelf3").ok);
+	if(configBusy!=INVALID_HANDLE_VALUE)CloseHandle(configBusy);
+	HANDLE rangeBusy=CreateFileW((root+L"\\Shelf2\\config.lua").c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,0,nullptr);
+	OVERLAPPED range={};
+	const bool rangeLocked=rangeBusy!=INVALID_HANDLE_VALUE && LockFileEx(rangeBusy,LOCKFILE_EXCLUSIVE_LOCK|LOCKFILE_FAIL_IMMEDIATELY,0,1,0,&range)!=FALSE;
+	const auto rangeConfig=storage.Load(L"Shelf2");
+	Check("byte-range locked config reports Windows read error",rangeLocked && !rangeConfig.ok && rangeConfig.message.find(L"Shelf2\\config.lua")!=std::wstring::npos && rangeConfig.message.find(L"Windows error 33")!=std::wstring::npos && storage.Load(L"Shelf3").ok);
+	if(rangeLocked)UnlockFileEx(rangeBusy,0,1,0,&range);
+	if(rangeBusy!=INVALID_HANDLE_VALUE)CloseHandle(rangeBusy);
+	if(discoveryBusy!=INVALID_HANDLE_VALUE)CloseHandle(discoveryBusy);
+	Check("reload discovers previously busy shelf",storage.Discover().ok && storage.Discover().value.size()==6);
+	// Remove only the disposable fixtures created above, never production shelves.
+	for(const auto id:{L"Shelf2",L"Shelf3",L"Shelf90",L"Shelf91",L"Shelf92",L"Shelf93",L"Shelf94",L"Shelf95"})
+	{
+		DeleteFileW((root+L"\\"+id+L"\\Shelf.ini").c_str());DeleteFileW((root+L"\\"+id+L"\\config.lua").c_str());
+		RemoveDirectoryW((root+L"\\"+id).c_str());
+	}
+	Check("traversal shelf rejected", !storage.Load(L"..\\outside").ok);
+	Check("unknown shelf rejected", !storage.Load(L"Shelf999").ok);
+	Check("UNC editing root rejected", !Storage(L"\\\\server\\share").Discover().ok);
+	const std::string original=Read(shelf+L"\\config.lua");
+	Edit theme{EditKind::SetTheme,0,0,L"Forest",L"",L""};
+	const auto originalIni=Read(shelf+L"\\Shelf.ini");
+	auto themePrepared=storage.Prepare(loaded.value,theme,nullptr,L"");
+	auto themeSaved=storage.Commit(themePrepared.value,[](){return true;});
+	auto forestIni=originalIni;
+	forestIni.replace(forestIni.find("DeepOcean.inc"),13,"Forest.inc");
+	Check("theme save changes only the selected include",themeSaved.ok && Read(shelf+L"\\Shelf.ini")==forestIni && Read(shelf+L"\\config.lua")==original);
+	Check("theme save backs up original skin bytes",themeSaved.ok && Read(themeSaved.value.backup)==originalIni);
+	loaded=storage.Load(L"Shelf1");theme.label=L"..\\outside";
+	Check("theme cannot choose an arbitrary include path",!storage.Prepare(loaded.value,theme,nullptr,L"").ok);
+	theme.label=L"Obsidian";themePrepared=storage.Prepare(loaded.value,theme,nullptr,L"");
+	Check("locked theme save changes no files",!storage.Commit(themePrepared.value,[](){return false;}).ok && Read(shelf+L"\\Shelf.ini")== (themeSaved.ok?forestIni:originalIni));
+	loaded=storage.Load(L"Shelf1");
+	auto image=PrepareIcon({root+L"\\Transparent.png",false});
+	Check("storage fixture icon prepared", image.ok);
+	Edit edit{EditKind::AddItem,0,0,L"Spotify",L"notepad.exe",L"file.png"};
+	Write(icons+L"\\spotify.png","owner icon");
+	auto prepared=storage.Prepare(loaded.value,edit,image.ok?&image.value:nullptr,L"spotify");
+	Check("save prepares without replacing config", prepared.ok && Read(shelf+L"\\config.lua")==original);
+	auto denied=storage.Commit(prepared.value,[](){return false;});
+	Check("revoked save cannot commit", !denied.ok && Read(shelf+L"\\config.lua")==original);
+	prepared=storage.Prepare(loaded.value,edit,image.ok?&image.value:nullptr,L"Spotify");
+	auto saved=storage.Commit(prepared.value,[](){return true;});
+	Check("case-insensitive icon collision picks new filename", saved.ok && saved.value.icon==L"Spotify-2.png");
+	Check("existing icon is never overwritten", Read(icons+L"\\spotify.png")=="owner icon");
+	Check("saved PNG exactly matches preview bytes", saved.ok && Read(icons+L"\\"+saved.value.icon)==
+		std::string(reinterpret_cast<const char*>(image.value.bytes.data()),image.value.bytes.size()));
+	Check("previous config has recoverable backup", saved.ok && Read(saved.value.backup)==original);
+	auto after=storage.Load(L"Shelf1");
+	Check("saved config references imported icon", after.ok && after.value.document.tabs[0].items.back().icon==saved.value.icon);
+	Check("same prepared transaction cannot commit twice", !storage.Commit(prepared.value,[](){return true;}).ok);
+	auto stale=storage.Prepare(loaded.value,edit,nullptr,L"");
+	Check("changed snapshot cannot overwrite later edit", !stale.ok ||
+		!storage.Commit(stale.value,[](){return true;}).ok);
+	loaded=storage.Load(L"Shelf1");
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto edited=Read(shelf+L"\\config.lua")+"\n-- concurrent owner edit\n";
+	Write(shelf+L"\\config.lua",edited);
+	Check("concurrent source edit rejects replacement", !storage.Commit(prepared.value,[](){return true;}).ok &&
+		Read(shelf+L"\\config.lua")==edited);
+	const auto hard=shelf+L"\\config.lua";
+	const auto alias=root+L"\\hardlink.lua";
+	Check("hardlink fixture created", CreateHardLinkW(alias.c_str(),hard.c_str(),nullptr)!=FALSE);
+	Check("hardlinked config is read-only to editor", !storage.Load(L"Shelf1").ok);
+	DeleteFileW(alias.c_str());
+	loaded=storage.Load(L"Shelf1");
+	auto first=storage.Prepare(loaded.value,edit,&image.value,L"parallel");
+	auto second=storage.Prepare(loaded.value,edit,&image.value,L"parallel");
+	Check("simultaneous reservations use unique complete icons",first.ok && second.ok &&
+		Read(icons+L"\\parallel.png")==Read(icons+L"\\parallel-2.png") && !Read(icons+L"\\parallel.png").empty());
+	storage.Commit(first.value,[](){return false;}); storage.Commit(second.value,[](){return false;});
+	Check("cancelled reservations clean up only owned files",GetFileAttributesW((icons+L"\\parallel.png").c_str())==INVALID_FILE_ATTRIBUTES &&
+		GetFileAttributesW((icons+L"\\parallel-2.png").c_str())==INVALID_FILE_ATTRIBUTES && Read(icons+L"\\spotify.png")=="owner icon");
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	Check("prepared save pins shelf against redirection",prepared.ok && !MoveFileW(shelf.c_str(),(root+L"\\MovedShelf").c_str()));
+	storage.Commit(prepared.value,[](){return false;});
+	prepared=storage.Prepare(loaded.value,edit,&image.value,L"failed-save");
+	const auto beforeFailure=Read(hard);
+	SetFileAttributesW(hard.c_str(),FILE_ATTRIBUTE_READONLY);
+	auto readOnly=storage.Commit(prepared.value,[](){return true;});
+	Check("replacement failure keeps old config and removes new icon",!readOnly.ok && Read(hard)==beforeFailure &&
+		GetFileAttributesW((icons+L"\\failed-save.png").c_str())==INVALID_FILE_ATTRIBUTES);
+	SetFileAttributesW(hard.c_str(),FILE_ATTRIBUTE_NORMAL);
+	Check("redirected editing root rejected",!Storage(root+L"\\RedirectedRoot").Discover().ok);
+	// At the final authorization boundary, ordinary writes/moves must be blocked;
+	// a permitted outside ReplaceFile save must have recoverable bytes and a warning.
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	int gates=0; const auto validated=Read(hard); const auto raced=validated+"\n-- final boundary edit\n";
+	bool writeBlocked=false;
+	auto race=storage.Commit(prepared.value,[&](){
+		if(++gates==2) {
+			HANDLE writer=CreateFileW(hard.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+			writeBlocked=writer==INVALID_HANDLE_VALUE;
+			if(!writeBlocked){CloseHandle(writer);Write(hard,raced);}
+		}
+		return true;
+	});
+	Check("final read lease blocks ordinary concurrent writes",race.ok && writeBlocked && Read(race.value.backup)==validated);
+	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto beforeMove=Read(hard); const auto outsideVersion=beforeMove+"\n-- outside replacement\n";
+	const auto external=root+L"\\external.lua";Write(external,outsideVersion);gates=0;bool moved=false;DWORD moveError=0;
+	auto renameRace=storage.Commit(prepared.value,[&](){
+		if(++gates==2){moved=MoveFileExW(external.c_str(),hard.c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;moveError=moved?0:GetLastError();}
+		return true;
+	});
+	Check("open config blocks competing MoveFileEx without losing either file",renameRace.ok && !moved &&
+		(moveError==ERROR_ACCESS_DENIED || moveError==ERROR_SHARING_VIOLATION) &&
+		Read(external)==outsideVersion && Read(renameRace.value.backup)==beforeMove);
+	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto outsideSave=Read(hard)+"\n-- outside ReplaceFile save\n";
+	Write(external,outsideSave);gates=0;bool replacedDuringSave=false;DWORD replacementError=0;
+	const auto externalBackup=root+L"\\external-backup.lua";
+	auto replaceRace=storage.Commit(prepared.value,[&](){
+		if(++gates==2) {
+			replacedDuringSave=ReplaceFileW(hard.c_str(),external.c_str(),externalBackup.c_str(),0,nullptr,nullptr)!=FALSE;
+			replacementError=replacedDuringSave?0:GetLastError();
+		}
+		return true;
+	});
+	std::cout<<"Outside ReplaceFile: replaced="<<replacedDuringSave<<" error="<<replacementError<<" save="<<replaceRace.ok<<'\n';
+	Check("concurrent replacement is preserved and reported",replaceRace.ok && replacedDuringSave &&
+		Read(replaceRace.value.backup)==outsideSave && !replaceRace.value.warning.empty());
+	loaded=storage.Load(L"Shelf1");prepared=storage.Prepare(loaded.value,edit,nullptr,L"");
+	const auto busyOriginal=Read(hard);
+	HANDLE busyWriter=CreateFileW(hard.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+	auto busySave=storage.Commit(prepared.value,[](){return true;});
+	Check("existing writer causes safe save failure",busyWriter!=INVALID_HANDLE_VALUE && !busySave.ok && Read(hard)==busyOriginal);
+	if(busyWriter!=INVALID_HANDLE_VALUE)CloseHandle(busyWriter);
+	const auto example=shelf+L"\\config.example.lua";
+	MoveFileW(hard.c_str(),example.c_str());loaded=storage.Load(L"Shelf1");
+	prepared=storage.Prepare(loaded.value,edit,nullptr,L"");gates=0;
+	auto created=storage.Commit(prepared.value,[&](){if(++gates==2)Write(hard,busyOriginal+"\n-- owner created config\n");return true;});
+	Check("example-based save never overwrites newly created config",loaded.ok && loaded.value.example && prepared.ok && !created.ok &&
+		Read(hard)==busyOriginal+"\n-- owner created config\n");
+	// Compare native replacement behavior in isolated files, never user data.
+	const auto replaceOld=root+L"\\replace-old.txt",replaceNew=root+L"\\replace-new.txt",replaceBackup=root+L"\\replace-backup.txt";
+	Write(replaceOld,"actual outside edit");Write(replaceNew,"prepared edit");
+	HANDLE held=CreateFileW(replaceOld.c_str(),GENERIC_READ|DELETE,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+	BOOL replaced=ReplaceFileW(replaceOld.c_str(),replaceNew.c_str(),replaceBackup.c_str(),0,nullptr,nullptr);
+	Check("native replacement preserves actual replaced bytes with read lease",held!=INVALID_HANDLE_VALUE && replaced &&
+		Read(replaceOld)=="prepared edit" && Read(replaceBackup)=="actual outside edit");
+	if(held!=INVALID_HANDLE_VALUE)CloseHandle(held);
+	const auto outside=root+L"\\replace-outside.txt",link=root+L"\\replace-link.txt",linkNew=root+L"\\replace-link-new.txt",linkBackup=root+L"\\replace-link-backup.txt";
+	Write(outside,"outside owner");Write(linkNew,"replacement");
+	const BOOL linkMade=CreateSymbolicLinkW(link.c_str(),outside.c_str(),0);
+	Check("symbolic replacement fixture created",linkMade!=FALSE);
+	if(linkMade) {
+		const BOOL linkReplaced=ReplaceFileW(link.c_str(),linkNew.c_str(),linkBackup.c_str(),0,nullptr,nullptr);
+		std::cout<<"ReplaceFile link result="<<linkReplaced<<" error="<<(linkReplaced?0:GetLastError())<<'\n';
+		Check("native replacement does not alter a symbolic target",Read(outside)=="outside owner");
+	}
+	Edit addShelf{EditKind::AddShelf,0,0,L"New tab",L"Forest",L""};
+	addShelf.label=L"#CURRENTCONFIG#";
+	Check("new shelf tab name cannot undergo Rainmeter expansion",!storage.Prepare({},addShelf,nullptr,L"").ok);
+	addShelf.label=L"New tab";
+	auto newShelf=storage.Prepare({},addShelf,nullptr,L"");
+	Check("new shelf preparation leaves existing shelves unchanged",newShelf.ok && !storage.Load(L"Shelf2").ok);
+	Check("locked creation cannot publish a shelf",!storage.Commit(newShelf.value,[](){return false;}).ok && !storage.Load(L"Shelf2").ok);
+	newShelf=storage.Prepare({},addShelf,nullptr,L"");
+	auto newSaved=storage.Commit(newShelf.value,[](){return true;});
+	auto newLoaded=storage.Load(L"Shelf2");
+	Check("new shelf uses trusted layout and requested first tab",newSaved.ok && newLoaded.ok &&
+		newLoaded.value.shelf.itemCapacity==18 && newLoaded.value.document.tabs.size()==1 && newLoaded.value.document.tabs[0].name==L"New tab");
+	Check("new shelf enables dynamic sizing in its generated Rainmeter section",newSaved.ok &&
+		Read(root+L"\\Shelf2\\Shelf.ini").find("[Rainmeter]\nUpdate=1000\nAccurateText=1\nDynamicWindowSize=1\n")!=std::string::npos);
+	Write(root+L"\\Shelf2\\owner-notes.txt","keep this custom file");
+	Edit removeShelf{EditKind::RemoveShelf,0,0,L"",L"",L""};
+	auto removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
+	Check("completed creation releases its directory for later removal",removal.ok);
+	Check("locked removal leaves the shelf usable",!storage.Commit(removal.value,[](){return false;}).ok && storage.Load(L"Shelf2").ok);
+	removal=storage.Prepare(newLoaded.value,removeShelf,nullptr,L"");
+	auto removed=storage.Commit(removal.value,[](){return true;});
+	Check("removed shelf remains fully recoverable including unknown files",removed.ok && !storage.Load(L"Shelf2").ok &&
+		Read(removed.value.backup+L"\\owner-notes.txt")=="keep this custom file" && !Read(removed.value.backup+L"\\Shelf.ini").empty());
+	CoUninitialize();
+	std::cout<<checks<<" storage checks, "<<failures<<" failures\n";
+	return failures?1:0;
+}
