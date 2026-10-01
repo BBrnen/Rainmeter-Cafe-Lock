@@ -41,7 +41,7 @@ $cases=@{
 }
 if ($AllVariants) {
     $cases = @{}
-    $number = 100
+    $number = 1
     foreach ($source in @($stock1, $stock2, $stock3, $generated.Replace("DynamicWindowSize=1`n", ''))) {
         foreach ($theme in @('DeepOcean', 'Forest', 'Terracotta', 'Obsidian')) {
             foreach ($newline in @('LF', 'CRLF')) {
