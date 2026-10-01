@@ -8,6 +8,7 @@ int wmain(int argc, wchar_t** argv)
 {
 	assert(argc == 6);
 	const auto result = CafeShelf::F1::Inspect(argv[1], argv[2]);
+	if (!result.ok) std::wcerr << L"Inspection refusal: " << result.message << std::endl;
 	const std::wstring expected = argv[3];
 	if (expected == L"refused")
 	{

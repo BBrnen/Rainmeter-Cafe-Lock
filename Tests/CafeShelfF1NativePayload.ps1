@@ -59,6 +59,9 @@ foreach($path in @('manifest.json','payload/@Resources/ShelfEngine.lua','payload
  Need (Test-Path -LiteralPath (Join-Path $bundle $path)) "Missing native F1 bundle file: $path"
 }
 $manifest=Get-Content -LiteralPath (Join-Path $bundle 'manifest.json') -Raw | ConvertFrom-Json
+foreach ($file in $manifest.Files) {
+ Need ((Get-FileHash -LiteralPath (Join-Path $bundle $file.Path) -Algorithm SHA256).Hash.ToLowerInvariant() -eq $file.Hash) "Payload checkout bytes do not match manifest: $($file.Path)"
+}
 Need ($manifest.UpstreamRevision -eq 'd4f186ba0b5c262c7559b80841132f5fd3884f3c') 'Unexpected upstream provenance.'
 Need ($manifest.F1Revision -eq 'c6ce82ab7c2e9f901b01c712a0efd22bdee6d5c9') 'Unexpected F1 provenance.'
 Need ($manifest.PatchSha256 -eq '6c4913af57f1b8542d287c72b08e3ee840275cae51b7f7a96df40707891956e9') 'Unexpected F1 patch digest.'
