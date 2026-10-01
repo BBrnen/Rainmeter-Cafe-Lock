@@ -51,7 +51,7 @@ void OutsideWrite(const std::wstring& path, const char* text, bool create)
 void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std::wstring& scenario)
 {
 	using namespace CafeShelf::F1;
-	if (scenario == L"apply-standard")
+	if (scenario == L"apply-standard" || scenario == L"apply-permissions-refused")
 	{
 		BYTE admin[SECURITY_MAX_SID_SIZE]{}; DWORD size = sizeof(admin); BOOL member = TRUE;
 		assert(CreateWellKnownSid(WinBuiltinAdministratorsSid, nullptr, admin, &size));
@@ -174,6 +174,15 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		assert(applied.value.status == Status::ManualRecoveryRequired);
 		assert(Bytes(preview.shelfRoot + L"\\" + preview.changes.front().relativePath) == "outside edit");
 		assert(!applied.value.manualRecovery.empty());
+	}
+	else if (scenario == L"apply-permissions-refused")
+	{
+		assert(applied.value.status == Status::Refused && !gap && applied.value.changed.empty());
+		for (size_t i = 0; i < preview.changes.size(); ++i)
+		{
+			assert(Bytes(preview.shelfRoot + L"\\" + preview.changes[i].relativePath) == originals[i]);
+			assert(Permissions(preview.shelfRoot + L"\\" + preview.changes[i].relativePath) == permissions[i]);
+		}
 	}
 	else
 	{

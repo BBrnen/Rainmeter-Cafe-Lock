@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory=$true)][string]$Directory,
     [Parameter(Mandatory=$true)][string]$UpstreamDirectory,
     [Parameter(Mandatory=$true)][string]$PayloadDirectory,
-    [switch]$AllVariants
+    [switch]$AllVariants,
+    [string]$StandardApplyExecutable
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -58,4 +59,8 @@ Write-Bytes (Join-Path $root '@Resources\Variables.inc') ([IO.File]::ReadAllByte
 Write-Bytes (Join-Path $root 'Shelf1\config.lua') $utf8.GetBytes('-- sentinel configuration must never be opened')
 Write-Bytes (Join-Path $root '@Resources\Icons\sentinel.png') ([byte[]](1,2,3))
 Write-Bytes (Join-Path $root '@Resources\Themes\sentinel.inc') $utf8.GetBytes('[Variables]')
-$root
+if ($StandardApplyExecutable) {
+    if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Standard-user application fixture requires a disposable Windows runner.' }
+    & $StandardApplyExecutable (Split-Path -Parent $root) $PayloadDirectory apply-standard 0 0
+    if ($LASTEXITCODE -ne 0) { throw 'Standard-user-owned F1 update failed.' }
+} else { $root }

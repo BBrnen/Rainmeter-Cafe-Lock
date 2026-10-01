@@ -315,9 +315,9 @@ void PreserveMetadata(HANDLE source, HANDLE destination, const std::function<boo
 	SECURITY_DESCRIPTOR_CONTROL control = 0; DWORD revision = 0;
 	Need(GetSecurityDescriptorControl(descriptor, &control, &revision) && acl, "unsupported original permissions");
 	Authorize(authorized);
-	// New stages already inherit from the same target parent. Explicitly
-	// re-enabling inheritance re-expands CREATOR OWNER for the staging owner,
-	// introducing permissions absent from the verified original.
+	// New stages are unprotected by default; retain source protection when set.
+	// Windows may expand CREATOR OWNER for the new owner. Refuse below rather
+	// than accepting any permission difference.
 	Need(SetSecurityInfo(destination, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | ((control & SE_DACL_PROTECTED) ? PROTECTED_DACL_SECURITY_INFORMATION : 0),
 		nullptr, nullptr, acl, nullptr) == ERROR_SUCCESS, "cannot preserve original permissions");
 	PSECURITY_DESCRIPTOR writtenDescriptor = nullptr; PACL writtenAcl = nullptr;

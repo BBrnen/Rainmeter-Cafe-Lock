@@ -77,8 +77,14 @@ try {
                 $standardSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
                 & icacls.exe (Split-Path -Parent $standardRoot) /grant ('*' + $standardSid + ':(OI)(CI)M') /T | Out-Null
                 if ($LASTEXITCODE -ne 0) { throw 'Could not prepare owner-writable standard-user F1 fixture' }
-                & ./RunAsStandardF1.exe (Join-Path $output 'CafeShelfF1Compatibility.exe') (Split-Path -Parent $standardRoot) $payload apply-standard 0 0
-                if ($LASTEXITCODE -ne 0) { throw 'Standard-user F1 update/permissions verification failed' }
+                & ./RunAsStandardF1.exe (Join-Path $output 'CafeShelfF1Compatibility.exe') (Split-Path -Parent $standardRoot) $payload apply-permissions-refused 0 0
+                if ($LASTEXITCODE -ne 0) { throw 'Different-owner permission-expansion refusal failed' }
+                $ownedDirectory = Join-Path $output ('F1-owner-' + [guid]::NewGuid().ToString('N'))
+                New-Item -ItemType Directory -Path $ownedDirectory | Out-Null
+                & icacls.exe $ownedDirectory /grant ('*' + $standardSid + ':(OI)(CI)M') | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Could not prepare standard-user-owned fixture directory' }
+                & ./RunAsStandardF1.exe 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -File $fixtureScript -Directory $ownedDirectory -UpstreamDirectory $upstream -PayloadDirectory $payload -StandardApplyExecutable (Join-Path $output 'CafeShelfF1Compatibility.exe')
+                if ($LASTEXITCODE -ne 0) { throw 'Standard-user-owned F1 update/permissions verification failed' }
             }
             return
         }
