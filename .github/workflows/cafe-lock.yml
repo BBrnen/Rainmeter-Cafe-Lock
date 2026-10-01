@@ -161,6 +161,10 @@ jobs:
           $difference = Compare-Object -ReferenceObject $expected -DifferenceObject $actual
           if ($difference) { throw "ShelfSuite patch changed unexpected paths: $($difference | Out-String)" }
 
+      - name: Audit the bundled native ShelfSuite F1 payload
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests/CafeShelfF1NativePayload.ps1 -UpstreamDirectory work-package/ShelfSuite
+
       - name: Test real ShelfSuite with a standard-user token
         shell: cmd
         run: |
