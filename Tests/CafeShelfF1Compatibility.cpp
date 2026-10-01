@@ -6,7 +6,7 @@
 
 int wmain(int argc, wchar_t** argv)
 {
-	assert(argc == 6);
+	assert(argc == 6 || argc == 7);
 	const auto result = CafeShelf::F1::Inspect(argv[1], argv[2]);
 	if (!result.ok) std::wcerr << L"Inspection refusal: " << result.message << std::endl;
 	const std::wstring expected = argv[3];
@@ -14,6 +14,7 @@ int wmain(int argc, wchar_t** argv)
 	{
 		assert(!result.ok);
 		assert(result.value.status == CafeShelf::F1::Status::Refused);
+		if (argc == 7) assert(result.message.find(argv[6]) != std::wstring::npos);
 		return 0;
 	}
 	assert(result.ok);

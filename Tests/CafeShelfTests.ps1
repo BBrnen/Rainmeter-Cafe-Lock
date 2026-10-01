@@ -80,6 +80,22 @@ try {
         New-Item -ItemType HardLink -Path (Join-Path (Split-Path -Parent $linkedRoot) 'linked-engine') -Target (Join-Path $linkedRoot '@Resources/ShelfEngine.lua') | Out-Null
         & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $linkedRoot) $payload refused 0 0
         if ($LASTEXITCODE -ne 0) { throw 'Hard-linked target was accepted' }
+        $missingRoot = New-F1Fixture ('F1-missing-' + [guid]::NewGuid().ToString('N'))
+        Remove-Item -LiteralPath (Join-Path $missingRoot 'Shelf2/Shelf.ini')
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $missingRoot) $payload refused 0 0 'Shelf2\Shelf.ini'
+        if ($LASTEXITCODE -ne 0) { throw 'Missing-target refusal did not identify the affected relative file' }
+        $tamperedRoot = New-F1Fixture ('F1-tampered-' + [guid]::NewGuid().ToString('N'))
+        $tamperedBundle = Join-Path $output ('F1-bundle-' + [guid]::NewGuid().ToString('N'))
+        Copy-Item -LiteralPath $payload -Destination $tamperedBundle -Recurse
+        $manifestPath = Join-Path $tamperedBundle 'manifest.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $oldHash = (Get-FileHash -LiteralPath (Join-Path $tamperedRoot 'Shelf1/Shelf.ini') -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText((Join-Path $tamperedRoot 'Shelf1/Shelf.ini'), 'customized fixture', [Text.UTF8Encoding]::new($false))
+        $newHash = (Get-FileHash -LiteralPath (Join-Path $tamperedRoot 'Shelf1/Shelf.ini') -Algorithm SHA256).Hash.ToLowerInvariant()
+        ($manifest.Recognition | Where-Object { $_.InputHash -eq $oldHash }).InputHash = $newHash
+        [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $tamperedRoot) $tamperedBundle refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Altered recognition manifest was trusted' }
         Write-Host 'PASS F1Compatibility: recognized Shelf1, Shelf2, Shelf3, Shelf4, and Shelf27 by complete contents; refused unknown Shelf99 and no-shelf fixtures without reading locked config, icon, or theme sentinels.'
         return
     }
