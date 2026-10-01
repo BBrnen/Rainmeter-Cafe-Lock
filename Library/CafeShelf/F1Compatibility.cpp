@@ -320,6 +320,13 @@ void PreserveMetadata(HANDLE source, HANDLE destination, const std::function<boo
 	// introducing permissions absent from the verified original.
 	Need(SetSecurityInfo(destination, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | ((control & SE_DACL_PROTECTED) ? PROTECTED_DACL_SECURITY_INFORMATION : 0),
 		nullptr, nullptr, acl, nullptr) == ERROR_SUCCESS, "cannot preserve original permissions");
+	PSECURITY_DESCRIPTOR writtenDescriptor = nullptr; PACL writtenAcl = nullptr;
+	Need(GetSecurityInfo(destination, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &writtenAcl, nullptr, &writtenDescriptor) == ERROR_SUCCESS, "cannot verify preserved permissions");
+	Free writtenFree{ writtenDescriptor };
+	SECURITY_DESCRIPTOR_CONTROL writtenControl = 0;
+	Need(GetSecurityDescriptorControl(writtenDescriptor, &writtenControl, &revision) && writtenAcl &&
+		(control & SE_DACL_PROTECTED) == (writtenControl & SE_DACL_PROTECTED) &&
+		acl->AclSize == writtenAcl->AclSize && memcmp(acl, writtenAcl, acl->AclSize) == 0, "original permissions could not be preserved exactly");
 	FILE_BASIC_INFO basic{};
 	Need(GetFileInformationByHandleEx(source, FileBasicInfo, &basic, sizeof(basic)) != FALSE, "cannot read original attributes");
 	Authorize(authorized);
