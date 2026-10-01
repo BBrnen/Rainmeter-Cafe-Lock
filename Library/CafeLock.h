@@ -3,6 +3,7 @@
 
 #include "CommandHandler.h"
 #include <algorithm>
+#include <functional>
 
 namespace CafeLock
 {
@@ -18,6 +19,12 @@ void Shutdown();
 void ShowLockedTrayMenu(HWND owner);
 void OpenShelfSuiteF1Compatibility(HWND owner);
 inline bool AllowsF1Compatibility() { return !IsLocked(); }
+inline bool AllowsF1Compatibility(const bool& cancelled, const std::function<void()>& dispatch)
+{
+	if (cancelled || !AllowsF1Compatibility()) return false;
+	dispatch();
+	return !cancelled && AllowsF1Compatibility();
+}
 
 inline bool AllowsBang(Bang bang)
 {

@@ -172,22 +172,23 @@ namespace
 constexpr int F1ApplyButton = 1001, F1LockButton = 1002;
 bool F1Authorized()
 {
-	if (f1Revoked || !CafeLock::AllowsF1Compatibility()) return false;
 	// Service normal UI messages between mutations so Lock Now and shutdown
 	// can revoke a synchronous update. Revocation stays latched even if a later
 	// message opens a new Maintenance session.
-	MSG message{};
-	for (unsigned int count = 0; count < 64 && PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE); ++count)
+	return CafeLock::AllowsF1Compatibility(f1Revoked, []()
 	{
-		if (message.message == WM_QUIT)
+		MSG message{};
+		for (unsigned int count = 0; count < 64 && PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE); ++count)
 		{
-			f1Revoked = true; f1Shutdown = true;
-			PostQuitMessage(static_cast<int>(message.wParam)); return false;
+			if (message.message == WM_QUIT)
+			{
+				f1Revoked = true; f1Shutdown = true;
+				PostQuitMessage(static_cast<int>(message.wParam)); return;
+			}
+			TranslateMessage(&message); DispatchMessageW(&message);
+			if (f1Revoked || !CafeLock::AllowsF1Compatibility()) return;
 		}
-		TranslateMessage(&message); DispatchMessageW(&message);
-		if (f1Revoked || !CafeLock::AllowsF1Compatibility()) return false;
-	}
-	return true;
+	});
 }
 HRESULT CALLBACK F1PreviewCallback(HWND window, UINT notification, WPARAM button, LPARAM, LONG_PTR)
 {
