@@ -101,7 +101,8 @@ function Preview-Text($dialog,[switch]$Expand) {
 }
 function Result-Dialog([string]$status) {
     $dialog = Password-Dialog ("ShelfSuite F1 - " + $status)
-    [void][LockNative]::PostMessage($dialog,0x111,[IntPtr]1,[IntPtr]::Zero)
+    Wait-For { [LockNative]::GetDlgItem($dialog,1) -ne [IntPtr]::Zero } 'F1 result OK button'
+    Click ([LockNative]::GetDlgItem($dialog,1))
     Wait-For { -not [LockNative]::IsWindow($dialog) } 'F1 result dismissed'
 }
 function Open-Preview {
