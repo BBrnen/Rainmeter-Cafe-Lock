@@ -156,11 +156,25 @@ creates a uniquely named sibling folder beside `Shelf Suite`, for example
 will change, preserving their relative paths. Every backup is flushed and
 re-hashed against the approved original before the first replacement.
 
-The service writes and hashes staged output, rechecks the target's identity and
-original hash immediately before each replacement, performs an atomic Windows
-replacement where possible, and verifies the written output hash. It writes a
-small recovery record and plain-language restore instructions containing only
-paths and hashes.
+Task 3 safety adjustment approved after `a937a47b`: the service holds verified
+targets by Windows file handles denying outside writes/renames. It writes and
+hashes staged output, preserves the target's appropriate permissions and
+attributes, and flushes verified backups and recovery/phase records before
+moving any original. It moves originals and staged replacements by their
+verified handles, with overwrite disabled at every destination, then verifies
+the placed output. Recovery follows the same no-overwrite rules. Records and
+plain-language restore instructions contain only declared paths, hashes and
+phases, never user configuration contents.
+
+An individual replacement comprises two moves, not one atomic replacement.
+Interruption after moving an original may leave that target temporarily absent;
+verified backup/holding materials and the flushed phase record support manual
+restoration. A competing file is never overwritten, even during recovery.
+Maintenance authorization is checked before every mutation. Revocation between
+the moves stops placement and recovery writes and explicitly reports incomplete
+work with retained recovery materials; it never silently bypasses authorization.
+Windows tests must cover this gap, process interruption, competing files, busy
+targets, preserved attributes/DACLs and standard-user access.
 
 The operation is not falsely described as one atomic transaction across all
 files. If a later replacement fails, it restores only files written by this

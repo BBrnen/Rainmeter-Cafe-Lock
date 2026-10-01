@@ -148,7 +148,7 @@
 
 - [ ] **Step 1: Write failing application/recovery tests**
 
-  Add assertions `BackupsVerifiedBeforeReplacement`, `OnlyChangedFilesBackedUp`, `AppliedOutputsMatchManifest`, `NoOpCreatesNoBackup`, `BackupFailureLeavesTargetsUnchanged`, `BusyLoadedTargetRefusesWithoutWrites`, `PartialFailureRestoresOnlyOwnOutput`, `OutsideEditNeverOverwrittenDuringRecovery`, and `RecoveryRecordContainsNoUserConfiguration`. Use fixture seam callbacks for write/replace failures and locks; do not use an actual café profile or full disk.
+  Add assertions `BackupsVerifiedBeforeReplacement`, `OnlyChangedFilesBackedUp`, `AppliedOutputsMatchManifest`, `NoOpCreatesNoBackup`, `BackupFailureLeavesTargetsUnchanged`, `BusyLoadedTargetRefusesWithoutWrites`, `PartialFailureRestoresOnlyOwnOutput`, `OutsideEditNeverOverwrittenDuringRecovery`, and `RecoveryRecordContainsNoUserConfiguration`. Also test interruption immediately after the original move, flushed pre-move phase records, Lock Now/revocation in that gap, competing destination files, original permissions/attributes, and standard-user access. Use compile-gated fixture seam callbacks for failures and locks; do not use an actual café profile or full disk.
 
 - [ ] **Step 2: Run the application suite to verify RED**
 
@@ -158,11 +158,11 @@
 
 - [ ] **Step 3: Implement verified backups and replacement**
 
-  Create a collision-safe timestamped sibling backup only after a fresh reinspection. Copy only planned originals under matching relative paths; flush and verify every backup hash before staging/replacing any target. Preserve each INI's recognized byte/newline form, stage and hash outputs, recheck path identity/original hash immediately before `ReplaceFileW`, then re-read and verify the output hash.
+  Approved safety adjustment after `a937a47b`: create a collision-safe timestamped sibling backup only after fresh reinspection and safe identity-bound target acquisition. Copy only planned originals under matching relative paths; flush and verify every backup hash, recovery instructions and necessary phase record before moving any original. Preserve recognized byte/newline forms and appropriate target permissions/attributes. Stage and verify outputs, hold targets against outside writes/renames, move originals by handle into unique holding paths, then place staged files by handle with overwrite disabled. Check authorization before every mutation. This is two moves per target, with an explicit interruption gap, not an atomic filename-based `ReplaceFileW` operation. Verify every placed output.
 
 - [ ] **Step 4: Implement bounded recovery and human instructions**
 
-  Write a minimal recovery record and `RESTORE.txt` containing paths/hashes only. On later failure, restore only a target still holding this run's expected output with the recorded safe identity. Retain the backup and return `ManualRecoveryRequired` when recovery would overwrite an outside edit, the backup is invalid, or a restore fails.
+  Write and flush minimal phase/recovery information and `RESTORE.txt` containing only paths/hashes/phases. On later failure, restore only the verified original through identity-bound, no-overwrite moves; a placed target must still have this run's exact output and recorded identity. Never overwrite a competing file. If authorization is revoked, perform no further placement or recovery mutations: retain verified materials and return `ManualRecoveryRequired` with explicit incomplete-operation instructions. Also retain materials when recovery is unsafe, a backup is invalid, or restoration fails. Test real process interruption in the two-move gap and recovery attempts encountering a competing file.
 
 - [ ] **Step 5: Run the application suite to verify GREEN and commit**
 
