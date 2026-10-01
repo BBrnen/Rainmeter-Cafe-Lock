@@ -47,9 +47,19 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text;
 using System.Runtime.InteropServices;
 public static class F1UiNative {
  [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr window);
+ delegate bool EnumChildProc(IntPtr window,IntPtr data);
+ [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr window,EnumChildProc callback,IntPtr data);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowTextLength(IntPtr window);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window,StringBuilder text,int length);
+ public static string AllText(IntPtr window) {
+  var result=new StringBuilder();
+  EnumChildWindows(window,(child,data)=> { var text=new StringBuilder(GetWindowTextLength(child)+1); GetWindowText(child,text,text.Capacity); result.AppendLine(text.ToString()); return true; },IntPtr.Zero);
+  return result.ToString();
+ }
  [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr window,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
  public static string RevokedPhase;
  public static string RevokedRecord;
@@ -110,6 +120,10 @@ try {
     Submit-Password $dialog $password $password
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
+    $previewText = [F1UiNative]::AllText($preview)
+    if (-not $previewText.Contains($shelf) -or -not $previewText.Contains('Shelf Suite-F1-Backup-') -or -not $previewText.Contains('Files requiring changes: 7')) { throw 'Preview does not identify the actual installation, change count and backup.' }
+    Click ([LockNative]::Child($preview,'Show file list'))
+    Wait-For { [F1UiNative]::AllText($preview).Contains('Shelf27\Shelf.ini') -and [F1UiNative]::AllText($preview).Contains('@Resources\ShelfEngine.lua') } 'complete F1 preview file list'
     Click ([LockNative]::Child($preview,'Cancel'))
     Wait-For { -not [LockNative]::IsWindow($preview) } 'F1 preview cancelled'
     if (((Target-Hashes) -join '|') -ne ($before -join '|') -or @(Backups).Count) { throw 'Cancel changed F1 files.' }
@@ -166,6 +180,9 @@ try {
     $status = if ([LockNative]::FindWindow('#32770','ShelfSuite F1 - Manual recovery required') -ne [IntPtr]::Zero) { 'Manual recovery required' } else { 'Refused' }
     Result-Dialog $status
     Write-Output 'PASS F1 native standard-user live UI: locked/forged denial, preview/cancel, Lock Now revocation, busy refusal, additional shelves, update without automatic reload, already-compatible no-op, customized refusal.'
+} catch {
+    Write-Output ($_ | Format-List * -Force | Out-String)
+    throw
 } finally {
     $config.Dispose()
     if ($process -and -not $process.HasExited) {
