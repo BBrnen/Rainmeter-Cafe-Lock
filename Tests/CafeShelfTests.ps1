@@ -72,6 +72,11 @@ try {
                 & cl.exe /nologo /EHsc /W4 /WX "$repo/Tests/RunAsStandard.cpp" /Fe:RunAsStandardF1.exe /link Advapi32.lib Shlwapi.lib
                 if ($LASTEXITCODE -ne 0) { throw 'F1 standard-user helper compilation failed' }
                 $standardRoot = New-F1Fixture ('F1-standard-' + [guid]::NewGuid().ToString('N'))
+                # Only this disposable fixture: emulate Documents' owner-writable ACL,
+                # rather than the elevated runner checkout's Administrators-only writes.
+                $standardSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                & icacls.exe (Split-Path -Parent $standardRoot) /grant ('*' + $standardSid + ':(OI)(CI)M') /T | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Could not prepare owner-writable standard-user F1 fixture' }
                 & ./RunAsStandardF1.exe (Join-Path $output 'CafeShelfF1Compatibility.exe') (Split-Path -Parent $standardRoot) $payload apply-standard 0 0
                 if ($LASTEXITCODE -ne 0) { throw 'Standard-user F1 update/permissions verification failed' }
             }
