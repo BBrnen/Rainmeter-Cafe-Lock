@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
+#include <aclapi.h>
 
 #ifdef CAFE_F1_TESTING
 namespace CafeShelf { namespace F1 {
@@ -20,6 +21,19 @@ std::string Bytes(const std::wstring& path)
 	assert(file.good());
 	return { std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>() };
 }
+std::string Permissions(const std::wstring& path)
+{
+	HANDLE file = CreateFileW(path.c_str(), READ_CONTROL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+	assert(file != INVALID_HANDLE_VALUE);
+	PSECURITY_DESCRIPTOR descriptor = nullptr; PACL acl = nullptr;
+	assert(GetSecurityInfo(file, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &acl, nullptr, &descriptor) == ERROR_SUCCESS);
+	SECURITY_DESCRIPTOR_CONTROL control = 0; DWORD revision = 0;
+	assert(GetSecurityDescriptorControl(descriptor, &control, &revision));
+	assert(acl);
+	std::string bytes(reinterpret_cast<const char*>(acl), acl->AclSize);
+	bytes += (control & SE_DACL_PROTECTED) ? 'P' : 'I';
+	LocalFree(descriptor); CloseHandle(file); return bytes;
+}
 void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std::wstring& scenario)
 {
 	using namespace CafeShelf::F1;
@@ -27,9 +41,19 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 	assert(inspected.ok);
 	const auto preview = inspected.value;
 	std::vector<std::string> originals;
+	std::vector<std::string> permissions;
+	std::vector<DWORD> attributes;
 	for (const auto& change : preview.changes) originals.push_back(Bytes(preview.shelfRoot + L"\\" + change.relativePath));
+	if (!preview.changes.empty()) assert(SetFileAttributesW((preview.shelfRoot + L"\\" + preview.changes.front().relativePath).c_str(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_ARCHIVE));
+	for (const auto& change : preview.changes)
+	{
+		permissions.push_back(Permissions(preview.shelfRoot + L"\\" + change.relativePath));
+		attributes.push_back(GetFileAttributesW((preview.shelfRoot + L"\\" + change.relativePath).c_str()));
+	}
 	size_t replacements = 0;
 	std::wstring backup;
+	bool authorized = scenario != L"apply-denied";
+	bool gap = false;
 	SetTestHook([&](const wchar_t* phase, const std::wstring& path)
 	{
 		const std::wstring step(phase);
@@ -41,6 +65,22 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 			assert(GetFileAttributesW((backup + L"\\Shelf1\\config.lua").c_str()) == INVALID_FILE_ATTRIBUTES);
 		}
 		if (step == L"before-backup" && scenario == L"apply-backup-failure") throw std::runtime_error("injected backup failure");
+		if (step == L"original-moved" && replacements == 0)
+		{
+			gap = true;
+			assert(!backup.empty());
+			const auto phaseRecord = Bytes(backup + L"\\PHASE.txt");
+			assert(phaseRecord.find("MOVE ORIGINAL") != std::string::npos);
+			assert(Bytes(backup + L"\\Holding\\" + preview.changes.front().relativePath) == originals.front());
+			assert(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES);
+			if (scenario == L"apply-crash-gap") ExitProcess(73);
+			if (scenario == L"apply-revoke-gap") authorized = false;
+			if (scenario == L"apply-abort-gap") throw std::runtime_error("interrupted original move");
+			if (scenario == L"apply-compete-gap")
+			{
+				std::ofstream competitor(path, std::ios::binary); competitor << "competing file";
+			}
+		}
 		if (step == L"before-replace" && replacements == 1 && (scenario == L"apply-recover" || scenario == L"apply-outside"))
 		{
 			if (scenario == L"apply-outside")
@@ -52,7 +92,8 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		}
 		if (step == L"after-replace") ++replacements;
 	});
-	const auto applied = Apply(preview, [&]() { return scenario != L"apply-denied"; });
+	const auto applied = Apply(preview, [&]() { return authorized; });
+	if (!applied.ok) std::wcerr << L"Application outcome: " << applied.message << L"; " << applied.value.message << std::endl;
 	SetTestHook({});
 	if (scenario == L"apply-denied") assert(!applied.ok && applied.code == CafeShelf::Error::Locked);
 	else if (scenario == L"apply-noop")
@@ -62,6 +103,19 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 	}
 	else if (scenario == L"apply-backup-failure") assert(!applied.ok);
 	else if (scenario == L"apply-recover") assert(applied.value.status == Status::FailedRecovered);
+	else if (scenario == L"apply-abort-gap") assert(gap && applied.value.status == Status::FailedRecovered);
+	else if (scenario == L"apply-revoke-gap")
+	{
+		assert(gap && applied.value.status == Status::ManualRecoveryRequired);
+		assert(GetFileAttributesW((preview.shelfRoot + L"\\" + preview.changes.front().relativePath).c_str()) == INVALID_FILE_ATTRIBUTES);
+		assert(Bytes(backup + L"\\Holding\\" + preview.changes.front().relativePath) == originals.front());
+	}
+	else if (scenario == L"apply-compete-gap")
+	{
+		assert(gap && applied.value.status == Status::ManualRecoveryRequired);
+		assert(Bytes(preview.shelfRoot + L"\\" + preview.changes.front().relativePath) == "competing file");
+		assert(Bytes(backup + L"\\Holding\\" + preview.changes.front().relativePath) == originals.front());
+	}
 	else if (scenario == L"apply-outside")
 	{
 		assert(applied.value.status == Status::ManualRecoveryRequired);
@@ -75,10 +129,15 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		const auto after = Inspect(skins, bundle);
 		assert(after.ok && after.value.status == Status::AlreadyCompatible);
 		assert(!backup.empty());
+		for (size_t i = 0; i < preview.changes.size(); ++i)
+		{
+			assert(Permissions(preview.shelfRoot + L"\\" + preview.changes[i].relativePath) == permissions[i]);
+			assert(GetFileAttributesW((preview.shelfRoot + L"\\" + preview.changes[i].relativePath).c_str()) == attributes[i]);
+		}
 		const auto record = Bytes(backup + L"\\RESTORE.txt");
 		assert(record.find("config.lua") == std::string::npos && record.find("sentinel") == std::string::npos);
 	}
-	if (scenario == L"apply-denied" || scenario == L"apply-backup-failure" || scenario == L"apply-recover")
+	if (scenario == L"apply-denied" || scenario == L"apply-backup-failure" || scenario == L"apply-recover" || scenario == L"apply-abort-gap")
 		for (size_t i = 0; i < preview.changes.size(); ++i)
 			assert(Bytes(preview.shelfRoot + L"\\" + preview.changes[i].relativePath) == originals[i]);
 	std::wcout << L"PASS F1 " << scenario << std::endl;

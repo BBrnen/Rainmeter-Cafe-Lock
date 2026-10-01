@@ -19,7 +19,7 @@ try {
         $fixtureScript = Join-Path $repo 'Tests/CafeShelfF1CompatibilityFixtures.ps1'
         $compilerArgs = @('/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
             "$repo/Tests/CafeShelfF1Compatibility.cpp", "$repo/Library/CafeShelf/F1Compatibility.cpp",
-            '/Fe:CafeShelfF1Compatibility.exe', '/link', 'bcrypt.lib')
+            '/Fe:CafeShelfF1Compatibility.exe', '/link', 'bcrypt.lib', 'advapi32.lib')
         if ($Suite -eq 'F1CompatibilityApply') { $compilerArgs = @('/DCAFE_F1_TESTING') + $compilerArgs }
         & cl.exe @compilerArgs
         if ($LASTEXITCODE -ne 0) { throw 'CafeShelf F1Compatibility compilation failed' }
@@ -49,10 +49,23 @@ try {
             }
         }
         if ($Suite -eq 'F1CompatibilityApply') {
-            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop')) {
+            foreach ($scenario in @('apply-success', 'apply-denied', 'apply-backup-failure', 'apply-recover', 'apply-outside', 'apply-noop', 'apply-abort-gap', 'apply-revoke-gap', 'apply-compete-gap', 'apply-crash-gap')) {
                 $applyRoot = New-F1Fixture ('F1-apply-' + [guid]::NewGuid().ToString('N'))
                 if ($scenario -eq 'apply-noop') { Set-F1Fixture $applyRoot }
                 & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $applyRoot) $payload $scenario 0 0
+                if ($scenario -eq 'apply-crash-gap') {
+                    if ($LASTEXITCODE -ne 73) { throw 'Interruption probe did not terminate at the original-move boundary' }
+                    $backup = @(Get-ChildItem -LiteralPath (Split-Path -Parent $applyRoot) -Directory -Filter 'Shelf Suite-F1-Backup-*')
+                    if ($backup.Count -ne 1) { throw 'Crash did not retain one recovery location' }
+                    if (-not (Test-Path -LiteralPath (Join-Path $backup[0].FullName 'RESTORE.txt')) -or -not (Test-Path -LiteralPath (Join-Path $backup[0].FullName 'PHASE.txt'))) { throw 'Crash recovery information missing' }
+                    $holding = @(Get-ChildItem -LiteralPath (Join-Path $backup[0].FullName 'Holding') -Recurse -File)
+                    if ($holding.Count -ne 1) { throw 'Crash fixture should have exactly one original in holding' }
+                    $relative = [IO.Path]::GetRelativePath((Join-Path $backup[0].FullName 'Holding'), $holding[0].FullName)
+                    if (Test-Path -LiteralPath (Join-Path $applyRoot $relative)) { throw 'Crash probe unexpectedly placed replacement' }
+                    if ((Get-FileHash -LiteralPath $holding[0].FullName).Hash -ne (Get-FileHash -LiteralPath (Join-Path $backup[0].FullName $relative)).Hash) { throw 'Crash holding and verified backup disagree' }
+                    Write-Host 'PASS real process interruption retained flushed recovery records, backup and original without placing replacement'
+                    continue
+                }
                 if ($LASTEXITCODE -ne 0) { throw "F1 compatibility application case failed: $scenario" }
             }
             return
