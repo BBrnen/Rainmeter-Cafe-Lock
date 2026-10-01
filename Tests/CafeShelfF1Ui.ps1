@@ -70,9 +70,9 @@ try {
     $process = Start-Process -FilePath (Join-Path $build 'Rainmeter.exe') -ArgumentList ('"' + $ini + '"') -PassThru -WindowStyle Hidden
     Wait-For { [LockNative]::FindWindow('RainmeterTrayClass',$null) -ne [IntPtr]::Zero } 'F1 runtime startup'
     $tray = [LockNative]::FindWindow('RainmeterTrayClass',$null)
-    $control = $tray
-    Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow','Shelf Suite\Shelf1') -ne [IntPtr]::Zero } 'loaded stock Shelf1'
-    $window = [LockNative]::FindWindow('RainmeterMeterWindow','Shelf Suite\Shelf1')
+    $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
+    Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$shelf\Shelf1\Shelf.ini") -ne [IntPtr]::Zero } 'loaded stock Shelf1'
+    $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$shelf\Shelf1\Shelf.ini")
     $position = Position $window
     [void][LockNative]::Send($tray,0x111,118,0)
     [LockNative]::Bang($control,'!Manage Settings')
