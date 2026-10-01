@@ -47,19 +47,9 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text;
 using System.Runtime.InteropServices;
 public static class F1UiNative {
  [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr window);
- delegate bool EnumChildProc(IntPtr window,IntPtr data);
- [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr window,EnumChildProc callback,IntPtr data);
- [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowTextLength(IntPtr window);
- [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window,StringBuilder text,int length);
- public static string AllText(IntPtr window) {
-  var result=new StringBuilder();
-  EnumChildWindows(window,(child,data)=> { var text=new StringBuilder(GetWindowTextLength(child)+1); GetWindowText(child,text,text.Capacity); result.AppendLine(text.ToString()); return true; },IntPtr.Zero);
-  return result.ToString();
- }
  [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr window,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
  public static string RevokedPhase;
  public static string RevokedRecord;
@@ -88,6 +78,31 @@ public static class F1UiNative {
 function Click($window) {
     if ($window -eq [IntPtr]::Zero) { throw 'Missing F1 UI control.' }
     [void][LockNative]::PostMessage($window,0xF5,[IntPtr]::Zero,[IntPtr]::Zero)
+}
+function Task-Click($dialog,[int]$id) {
+    # Documented TaskDialog message; it runs the real button callback.
+    [void][LockNative]::PostMessage($dialog,0x466,[IntPtr]$id,[IntPtr]::Zero)
+}
+function Preview-Text($dialog,[switch]$Expand) {
+    # Built-in Windows UI Automation, test-only. DirectUI content is not
+    # represented by ordinary child HWND captions. No runtime dependency.
+    $code = @'
+$ErrorActionPreference='Stop'
+Add-Type -AssemblyName UIAutomationClient
+$root=[System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]HANDLE_VALUE)
+if (EXPAND_VALUE) {
+ $condition=[System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty,'Show file list')
+ $button=$root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$condition)
+ if (-not $button) { throw 'Preview file-list expander is missing.' }
+ $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+}
+$items=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+foreach($item in $items) { $item.Current.Name }
+'@
+    $code = $code.Replace('HANDLE_VALUE',$dialog.ToInt64().ToString()).Replace('EXPAND_VALUE',$(if($Expand){'$true'}else{'$false'}))
+    $text = & powershell.exe -NoProfile -Command $code
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect native F1 preview with Windows UI Automation.' }
+    return ($text -join "`n")
 }
 function Result-Dialog([string]$status) {
     $dialog = Password-Dialog ("ShelfSuite F1 - " + $status)
@@ -120,16 +135,16 @@ try {
     Submit-Password $dialog $password $password
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
-    $previewText = [F1UiNative]::AllText($preview)
+    $previewText = Preview-Text $preview
     if (-not $previewText.Contains($shelf) -or -not $previewText.Contains('Shelf Suite-F1-Backup-') -or -not $previewText.Contains('Files requiring changes: 7')) { throw 'Preview does not identify the actual installation, change count and backup.' }
-    Click ([LockNative]::Child($preview,'Show file list'))
-    Wait-For { [F1UiNative]::AllText($preview).Contains('Shelf27\Shelf.ini') -and [F1UiNative]::AllText($preview).Contains('@Resources\ShelfEngine.lua') } 'complete F1 preview file list'
-    Click ([LockNative]::Child($preview,'Cancel'))
+    $previewText = Preview-Text $preview -Expand
+    if (-not $previewText.Contains('Shelf27\Shelf.ini') -or -not $previewText.Contains('@Resources\ShelfEngine.lua')) { throw 'F1 preview does not expose the complete declared file list.' }
+    Task-Click $preview 2
     Wait-For { -not [LockNative]::IsWindow($preview) } 'F1 preview cancelled'
     if (((Target-Hashes) -join '|') -ne ($before -join '|') -or @(Backups).Count) { throw 'Cancel changed F1 files.' }
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
-    Click ([LockNative]::Child($preview,'Lock Now'))
+    Task-Click $preview 1002
     Wait-For { -not [LockNative]::IsWindow($preview) } 'Lock Now cancels preview'
     [void][LockNative]::PostMessage($settings,0x111,[IntPtr]118,[IntPtr]::Zero)
     if (((Target-Hashes) -join '|') -ne ($before -join '|') -or @(Backups).Count) { throw 'Revoked preview changed files.' }
@@ -140,13 +155,13 @@ try {
     try {
         Open-Preview
         $preview = Password-Dialog 'ShelfSuite F1 compatibility'
-        Click ([LockNative]::Child($preview,'Apply'))
+        Task-Click $preview 1001
         Result-Dialog 'Refused'
     } finally { $busy.Dispose() }
     if (((Target-Hashes) -join '|') -ne ($before -join '|') -or @(Backups).Count) { throw 'Busy target produced writes.' }
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
-    Click ([LockNative]::Child($preview,'Apply'))
+    Task-Click $preview 1001
     Result-Dialog 'Updated'
     if (@(Backups).Count -ne 1) { throw 'Native update did not create one verified backup.' }
     if (-not [LockNative]::IsWindow($window) -or (Position $window) -ne $position) { throw 'Native F1 update changed the loaded skin or its position.' }
@@ -172,7 +187,7 @@ try {
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
     $revocation = [F1UiNative]::LockDuringApply($tray,$skins)
-    Click ([LockNative]::Child($preview,'Apply'))
+    Task-Click $preview 1001
     Wait-For { [LockNative]::FindWindow('#32770','ShelfSuite F1 - Manual recovery required') -ne [IntPtr]::Zero -or [LockNative]::FindWindow('#32770','ShelfSuite F1 - Refused') -ne [IntPtr]::Zero } 'revoked live operation result'
     if (-not $revocation.Wait(10000) -or -not $revocation.Result) { throw 'Real Lock Now was not delivered during native application.' }
     if ((Get-Content -LiteralPath ([F1UiNative]::RevokedRecord) -Raw) -ne [F1UiNative]::RevokedPhase) { throw 'Native operation wrote phase data after Lock Now returned.' }
