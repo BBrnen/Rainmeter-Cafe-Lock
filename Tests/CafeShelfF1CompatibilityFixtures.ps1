@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$Directory,
     [Parameter(Mandatory=$true)][string]$UpstreamDirectory,
-    [Parameter(Mandatory=$true)][string]$PayloadDirectory
+    [Parameter(Mandatory=$true)][string]$PayloadDirectory,
+    [switch]$AllVariants
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -37,6 +38,19 @@ $cases=@{
     'Shelf3'=With-Theme $stock3 'Terracotta' 'LF'
     'Shelf4'=With-Theme $generated 'DeepOcean' 'LF'
     'Shelf27'=With-Theme $generated 'Obsidian' 'CRLF'
+}
+if ($AllVariants) {
+    $cases = @{}
+    $number = 100
+    foreach ($source in @($stock1, $stock2, $stock3, $generated.Replace("DynamicWindowSize=1`n", ''))) {
+        foreach ($theme in @('DeepOcean', 'Forest', 'Terracotta', 'Obsidian')) {
+            foreach ($newline in @('LF', 'CRLF')) {
+                $original = With-Theme $source $theme $newline
+                $cases['Shelf' + $number++] = $original
+                $cases['Shelf' + $number++] = Dynamic $original
+            }
+        }
+    }
 }
 foreach($pair in $cases.GetEnumerator()) { Assert-Catalog $pair.Value; Write-Bytes (Join-Path $root ($pair.Key+'\Shelf.ini')) $utf8.GetBytes($pair.Value) }
 Write-Bytes (Join-Path $root '@Resources\ShelfEngine.lua') ([IO.File]::ReadAllBytes((Join-Path $UpstreamDirectory 'Shelf Suite/@Resources/ShelfEngine.lua')))

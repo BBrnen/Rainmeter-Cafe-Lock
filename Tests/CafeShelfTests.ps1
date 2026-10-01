@@ -68,6 +68,18 @@ try {
         Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/Variables.inc') -Destination (Join-Path $empty 'Skins/Shelf Suite/@Resources/Variables.inc')
         & ./CafeShelfF1Compatibility.exe (Join-Path $empty 'Skins') $payload refused 0 0
         if ($LASTEXITCODE -ne 0) { throw 'No-shelf fixture was accepted' }
+        $allRoot = & $fixtureScript -Directory (Join-Path $output ('F1-all-' + [guid]::NewGuid().ToString('N'))) -UpstreamDirectory $upstream -PayloadDirectory $payload -AllVariants
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $allRoot) $payload preview 34 32
+        if ($LASTEXITCODE -ne 0) { throw 'Complete approved INI catalog recognition failed' }
+        $linkedRoot = New-F1Fixture ('F1-linked-' + [guid]::NewGuid().ToString('N'))
+        $linkedParent = Split-Path -Parent (Split-Path -Parent $linkedRoot)
+        $junction = Join-Path $output ('F1-junction-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Junction -Path $junction -Target $linkedParent | Out-Null
+        & ./CafeShelfF1Compatibility.exe (Join-Path $junction 'Skins') $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Redirected ancestor was accepted' }
+        New-Item -ItemType HardLink -Path (Join-Path (Split-Path -Parent $linkedRoot) 'linked-engine') -Target (Join-Path $linkedRoot '@Resources/ShelfEngine.lua') | Out-Null
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $linkedRoot) $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Hard-linked target was accepted' }
         Write-Host 'PASS F1Compatibility: recognized Shelf1, Shelf2, Shelf3, Shelf4, and Shelf27 by complete contents; refused unknown Shelf99 and no-shelf fixtures without reading locked config, icon, or theme sentinels.'
         return
     }
