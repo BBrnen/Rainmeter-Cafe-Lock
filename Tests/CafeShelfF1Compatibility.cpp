@@ -37,6 +37,15 @@ std::string Permissions(const std::wstring& path)
 	bytes += (control & SE_DACL_PROTECTED) ? 'P' : 'I';
 	LocalFree(descriptor); CloseHandle(file); return bytes;
 }
+void OutsideWrite(const std::wstring& path, const char* text, bool create)
+{
+	HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, create ? CREATE_NEW : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	assert(file != INVALID_HANDLE_VALUE);
+	assert(SetEndOfFile(file));
+	DWORD written = 0; const auto length = static_cast<DWORD>(strlen(text));
+	assert(WriteFile(file, text, length, &written, nullptr) && written == length && FlushFileBuffers(file));
+	CloseHandle(file);
+}
 void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std::wstring& scenario)
 {
 	using namespace CafeShelf::F1;
@@ -101,15 +110,14 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 			if (scenario == L"apply-abort-gap") throw std::runtime_error("interrupted original move");
 			if (scenario == L"apply-compete-gap")
 			{
-				std::ofstream competitor(path, std::ios::binary); competitor << "competing file";
+				OutsideWrite(path, "competing file", true);
 			}
 		}
 		if (step == L"before-replace" && replacements == 1 && (scenario == L"apply-recover" || scenario == L"apply-outside"))
 		{
 			if (scenario == L"apply-outside")
 			{
-				std::ofstream edited(preview.shelfRoot + L"\\" + preview.changes.front().relativePath, std::ios::binary | std::ios::trunc);
-				edited << "outside edit";
+				OutsideWrite(preview.shelfRoot + L"\\" + preview.changes.front().relativePath, "outside edit", false);
 			}
 			throw std::runtime_error("injected later replacement failure");
 		}
