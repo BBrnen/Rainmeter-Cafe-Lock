@@ -4,7 +4,7 @@ $repo=(Resolve-Path "$PSScriptRoot/..").Path
 $bundle=Join-Path $repo 'ThirdParty/ShelfSuite/F1Compatibility'
 function Need([bool]$condition,[string]$message){if(-not $condition){throw $message}}
 Need ((git -C $UpstreamDirectory rev-parse HEAD).Trim() -eq 'd4f186ba0b5c262c7559b80841132f5fd3884f3c') 'Pinned ShelfSuite v2.1 source required.'
-foreach($path in @('manifest.json','payload/@Resources/ShelfEngine.lua','payload/@Resources/Variables.inc','README.md')){
+foreach($path in @('manifest.json','payload/@Resources/ShelfEngine.lua','payload/@Resources/Variables.inc','README.md','LICENSE-ShelfSuite.txt')){
  Need (Test-Path -LiteralPath (Join-Path $bundle $path)) "Missing native F1 bundle file: $path"
 }
 $manifest=Get-Content -LiteralPath (Join-Path $bundle 'manifest.json') -Raw | ConvertFrom-Json
