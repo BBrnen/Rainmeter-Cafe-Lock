@@ -100,9 +100,21 @@ $items=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.
 foreach($item in $items) { $item.Current.Name }
 '@
     $code = $code.Replace('HANDLE_VALUE',$dialog.ToInt64().ToString()).Replace('EXPAND_VALUE',$(if($Expand){'$true'}else{'$false'}))
-    $text = & powershell.exe -NoProfile -Command $code
-    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect native F1 preview with Windows UI Automation.' }
-    return ($text -join "`n")
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('-NoProfile','-Command',$code)) { $start.ArgumentList.Add($argument) }
+    $reader = [Diagnostics.Process]::Start($start)
+    try {
+        $text = $reader.StandardOutput.ReadToEndAsync()
+        $errorText = $reader.StandardError.ReadToEndAsync()
+        if (-not $reader.WaitForExit(30000)) { $reader.Kill(); throw 'UI Automation reader timed out.' }
+        if ($reader.ExitCode -ne 0) { throw ('Could not inspect native F1 preview: ' + $errorText.Result) }
+        return $text.Result
+    } finally { $reader.Dispose() }
 }
 function Result-Dialog([string]$status) {
     $dialog = Password-Dialog ("ShelfSuite F1 - " + $status)
