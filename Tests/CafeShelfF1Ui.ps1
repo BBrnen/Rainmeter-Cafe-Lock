@@ -84,36 +84,16 @@ function Task-Click($dialog,[int]$id) {
     [void][LockNative]::PostMessage($dialog,0x466,[IntPtr]$id,[IntPtr]::Zero)
 }
 function Preview-Text($dialog,[switch]$Expand) {
-    # Built-in Windows UI Automation, test-only. DirectUI content is not
-    # represented by ordinary child HWND captions. No runtime dependency.
-    $code = @'
-$ErrorActionPreference='Stop'
-Add-Type -AssemblyName UIAutomationClient
-$root=[System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]HANDLE_VALUE)
-if (EXPAND_VALUE) {
- $condition=[System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty,'Show file list')
- $button=$root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$condition)
- if (-not $button) { throw 'Preview file-list expander is missing.' }
- $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-}
-$items=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
-foreach($item in $items) { $item.Current.Name }
-'@
-    $code = $code.Replace('HANDLE_VALUE',$dialog.ToInt64().ToString()).Replace('EXPAND_VALUE',$(if($Expand){'$true'}else{'$false'}))
-    $start = [Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    $start.RedirectStandardOutput = $true
-    $start.RedirectStandardError = $true
-    foreach ($argument in @('-NoProfile','-Command',$code)) { $start.ArgumentList.Add($argument) }
-    $reader = [Diagnostics.Process]::Start($start)
+    # Native GUI-subsystem observer: no nested console process under the
+    # restricted CI token, no product dependency or alternate update route.
+    $snapshot = Join-Path $root (([guid]::NewGuid()).ToString('N') + '.preview')
+    $expandValue = if($Expand){'1'}else{'0'}
+    $arguments = $dialog.ToInt64().ToString() + ' ' + $process.Id + ' "' + $snapshot + '" ' + $expandValue
+    $reader = Start-Process -FilePath "$PSScriptRoot/../CafeF1PreviewProbe.exe" -ArgumentList $arguments -PassThru -WindowStyle Hidden
     try {
-        $text = $reader.StandardOutput.ReadToEndAsync()
-        $errorText = $reader.StandardError.ReadToEndAsync()
-        if (-not $reader.WaitForExit(30000)) { $reader.Kill(); throw 'UI Automation reader timed out.' }
-        if ($reader.ExitCode -ne 0) { throw ('Could not inspect native F1 preview: ' + $errorText.Result) }
-        return $text.Result
+        if (-not $reader.WaitForExit(30000)) { Stop-Process -Id $reader.Id -Force; throw 'UI Automation reader timed out.' }
+        if ($reader.ExitCode -ne 0) { throw 'Could not inspect native F1 preview with the standard-user observer.' }
+        return (Get-Content -LiteralPath $snapshot -Raw -Encoding utf8)
     } finally { $reader.Dispose() }
 }
 function Result-Dialog([string]$status) {
