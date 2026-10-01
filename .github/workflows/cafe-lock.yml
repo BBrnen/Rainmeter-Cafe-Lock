@@ -95,6 +95,13 @@ jobs:
           if errorlevel 1 exit /b 1
           CafeLockPolicy.exe
 
+      - name: Test compiled production F1 Settings and service entry guards
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File Tests\CafeF1Entry.ps1
+
       - name: Test native ShelfSuite F1 backup and recovery
         shell: cmd
         run: |

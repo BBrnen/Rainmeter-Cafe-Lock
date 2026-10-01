@@ -194,7 +194,7 @@ try {
     if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Live Lock Now did not revoke Manage.' }
     $status = if ([LockNative]::FindWindow('#32770','ShelfSuite F1 - Manual recovery required') -ne [IntPtr]::Zero) { 'Manual recovery required' } else { 'Refused' }
     Result-Dialog $status
-    Write-Output 'PASS F1 native standard-user live UI: locked/forged denial, preview/cancel, Lock Now revocation, busy refusal, additional shelves, update without automatic reload, already-compatible no-op, customized refusal.'
+    Write-Output 'PASS F1 native standard-user live UI: locked UI/non-route denial, preview/cancel, Lock Now revocation, busy refusal, additional shelves, update without automatic reload, already-compatible no-op, customized refusal.'
 } catch {
     Write-Output ($_ | Format-List * -Force | Out-String)
     throw

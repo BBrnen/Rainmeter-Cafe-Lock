@@ -139,6 +139,9 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 		if (step == L"after-replace") ++replacements;
 	});
 	const auto applied = Apply(preview, [&]() { return authorized && (!session || !session->IsLocked()); });
+	// A failed or recovered operation must not present historical placements as
+	// successful final updates. Incomplete paths belong in manualRecovery.
+	if (!applied.ok) assert(applied.value.changed.empty());
 	if (busy != INVALID_HANDLE_VALUE) CloseHandle(busy);
 	if (!applied.ok) std::wcerr << L"Application outcome: " << applied.message << L"; " << applied.value.message << std::endl;
 	SetTestHook({});
