@@ -138,7 +138,10 @@ if ($Suite -in @('Package', 'All') -and -not $FixtureBuildDirectory) {
         Assert-True (Test-Path "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1") 'extracted ZIP verifier must exist'
         . "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1"
         $scope=New-F1ChildAclScope
-        try { Assert-True ([CafeF1ChildAclScope]::Snapshot().IndexOf([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) -ge 0) 'runner ACL lacks self access' }
+        try {
+            Assert-True ([CafeF1ChildAclScope]::HasAccess([CafeF1ChildAclScope]::Snapshot(),[Security.Principal.WindowsIdentity]::GetCurrent().User.Value)) 'runner ACL lacks self access'
+            Assert-True ([CafeF1ChildAclScope]::HasAccess('D:(A;;GA;;;SY)','S-1-5-18')) 'SDDL alias must match numeric SID identity'
+        }
         finally { $scope.Dispose() }
         Assert-True $scope.Restored 'runner token default ACL was not restored'
         Assert-True ([CafeF1ChildAclScope]::Snapshot() -ceq $scope.Before) 'runner token default ACL changed persistently'

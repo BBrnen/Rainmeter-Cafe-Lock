@@ -65,6 +65,15 @@ public sealed class CafeF1ChildAclScope : IDisposable {
     IntPtr token, original;
     public bool Restored { get; private set; }
     public string Before { get; private set; }
+    public static bool HasAccess(string descriptor,string user) {
+        var sid=new SecurityIdentifier(user);
+        foreach(GenericAce entry in new RawSecurityDescriptor(descriptor).DiscretionaryAcl) {
+            var ace=entry as CommonAce;
+            if(ace!=null && ace.AceQualifier==AceQualifier.AccessAllowed && ace.SecurityIdentifier.Equals(sid) &&
+                ((ace.AccessMask & 0x10000000)!=0 || (ace.AccessMask & 0x1fffff)==0x1fffff)) return true;
+        }
+        return false;
+    }
     static IntPtr Read(IntPtr token) {
         int needed; GetTokenInformation(token,6,IntPtr.Zero,0,out needed);
         IntPtr value=Marshal.AllocHGlobal(needed);
