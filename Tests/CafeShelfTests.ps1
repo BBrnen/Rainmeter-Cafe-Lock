@@ -58,7 +58,7 @@ try {
                     $backup = @(Get-ChildItem -LiteralPath (Split-Path -Parent $applyRoot) -Directory -Filter 'Shelf Suite-F1-Backup-*')
                     if ($backup.Count -ne 1) { throw 'Crash did not retain one recovery location' }
                     if (-not (Test-Path -LiteralPath (Join-Path $backup[0].FullName 'RESTORE.txt')) -or -not (Test-Path -LiteralPath (Join-Path $backup[0].FullName 'PHASE.txt'))) { throw 'Crash recovery information missing' }
-                    $holding = @(Get-ChildItem -LiteralPath (Join-Path $backup[0].FullName 'Holding') -Recurse -File)
+                    $holding = @(Get-ChildItem -LiteralPath (Join-Path $backup[0].FullName 'Holding') -Recurse -File -Force)
                     if ($holding.Count -ne 1) { throw 'Crash fixture should have exactly one original in holding' }
                     $relative = [IO.Path]::GetRelativePath((Join-Path $backup[0].FullName 'Holding'), $holding[0].FullName)
                     if (Test-Path -LiteralPath (Join-Path $applyRoot $relative)) { throw 'Crash probe unexpectedly placed replacement' }
@@ -72,7 +72,7 @@ try {
                 & cl.exe /nologo /EHsc /W4 /WX "$repo/Tests/RunAsStandard.cpp" /Fe:RunAsStandardF1.exe /link Advapi32.lib Shlwapi.lib
                 if ($LASTEXITCODE -ne 0) { throw 'F1 standard-user helper compilation failed' }
                 $standardRoot = New-F1Fixture ('F1-standard-' + [guid]::NewGuid().ToString('N'))
-                & ./RunAsStandardF1.exe "`"$output/CafeShelfF1Compatibility.exe`"" "`"$(Split-Path -Parent $standardRoot)`"" "`"$payload`"" apply-standard 0 0
+                & ./RunAsStandardF1.exe (Join-Path $output 'CafeShelfF1Compatibility.exe') (Split-Path -Parent $standardRoot) $payload apply-standard 0 0
                 if ($LASTEXITCODE -ne 0) { throw 'Standard-user F1 update/permissions verification failed' }
             }
             return
