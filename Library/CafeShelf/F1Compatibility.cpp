@@ -229,13 +229,16 @@ std::vector<CatalogEntry> ReadCatalog(const std::wstring& payload)
 
 Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloadPath)
 {
+	std::wstring inspecting = L"Shelf Suite\\@Resources";
 	try
 	{
 		const std::wstring skins = FullPath(skinPath);
 		const std::wstring root = JoinPath(skins, ShelfRootName);
 		Pins pins;
 		PinDirectories(JoinPath(root, L"@Resources"), pins);
+		inspecting = L"Compatibility\\ShelfSuiteF1";
 		const auto catalog = ReadCatalog(FullPath(payloadPath));
+		inspecting = L"Shelf Suite";
 		std::vector<std::wstring> targets{ L"@Resources\\ShelfEngine.lua", L"@Resources\\Variables.inc" };
 		size_t shelves = 0;
 		WIN32_FIND_DATAW child{};
@@ -247,6 +250,7 @@ Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloa
 			{
 				const std::wstring name(child.cFileName);
 				if (!IsShelfName(name)) continue;
+				inspecting = name;
 				PinDirectories(JoinPath(root, name), pins);
 				targets.push_back(name + L"\\Shelf.ini");
 				++shelves;
@@ -260,6 +264,7 @@ Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloa
 		preview.proposedBackup = JoinPath(skins, L"Shelf Suite-F1-Backup-after-confirmation");
 		for (const auto& relative : targets)
 		{
+			inspecting = relative;
 			const auto hash = Sha256(ReadTarget(JoinPath(root, relative)));
 			const bool shared = relative.rfind(L"@Resources\\", 0) == 0;
 			std::vector<const CatalogEntry*> matches;
@@ -280,9 +285,9 @@ Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloa
 		}
 		return { true, std::move(preview), Error::None, {} };
 	}
-	catch (const std::exception&)
+	catch (const std::exception& error)
 	{
-		return Refuse(L"ShelfSuite compatibility inspection could not complete safely. No files were changed.");
+		return Refuse(inspecting + L": " + ToWide(error.what()) + L". No files were changed.");
 	}
 }
 
