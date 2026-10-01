@@ -83,11 +83,11 @@ function Task-Click($dialog,[int]$id) {
     # Documented TaskDialog message; it runs the real button callback.
     [void][LockNative]::PostMessage($dialog,0x466,[IntPtr]$id,[IntPtr]::Zero)
 }
-function Preview-Text($dialog,[switch]$Expand) {
+function Preview-Text($dialog,[switch]$Expand,[switch]$Dismiss) {
     # Native GUI-subsystem observer: no nested console process under the
     # restricted CI token, no product dependency or alternate update route.
     $snapshot = Join-Path $root (([guid]::NewGuid()).ToString('N') + '.preview')
-    $expandValue = if($Expand){'1'}else{'0'}
+    $expandValue = if($Dismiss){'2'}elseif($Expand){'1'}else{'0'}
     $arguments = $dialog.ToInt64().ToString() + ' ' + $process.Id + ' "' + $snapshot + '" ' + $expandValue
     $reader = Start-Process -FilePath "$PSScriptRoot/../CafeF1PreviewProbe.exe" -ArgumentList $arguments -PassThru -WindowStyle Hidden
     try {
@@ -101,8 +101,7 @@ function Preview-Text($dialog,[switch]$Expand) {
 }
 function Result-Dialog([string]$status) {
     $dialog = Password-Dialog ("ShelfSuite F1 - " + $status)
-    Wait-For { [LockNative]::GetDlgItem($dialog,1) -ne [IntPtr]::Zero } 'F1 result OK button'
-    Click ([LockNative]::GetDlgItem($dialog,1))
+    [void](Preview-Text $dialog -Dismiss)
     Wait-For { -not [LockNative]::IsWindow($dialog) } 'F1 result dismissed'
 }
 function Open-Preview {
