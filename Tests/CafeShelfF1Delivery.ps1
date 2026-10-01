@@ -137,6 +137,11 @@ if ($Suite -in @('Package', 'All') -and -not $FixtureBuildDirectory) {
     Test-Case 'ExtractedZipVerifierRejectsCorruptionAndMissingEntry' {
         Assert-True (Test-Path "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1") 'extracted ZIP verifier must exist'
         . "$PSScriptRoot/CafeShelfF1DeliveryRunner.ps1"
+        $scope=New-F1ChildAclScope
+        try { Assert-True ([CafeF1ChildAclScope]::Snapshot().IndexOf([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) -ge 0) 'runner ACL lacks self access' }
+        finally { $scope.Dispose() }
+        Assert-True $scope.Restored 'runner token default ACL was not restored'
+        Assert-True ([CafeF1ChildAclScope]::Snapshot() -ceq $scope.Before) 'runner token default ACL changed persistently'
         $zip=Join-Path "$scratch/build" 'ShelfSuite-Cafe-Lock-F1-Compatibility.zip'
         Assert-True ((Test-F1DeliveryArchive $zip).Count -eq 8) 'complete ZIP file count incorrect'
         $bad=Join-Path $scratch 'bad.zip'; [IO.File]::Copy($zip,$bad); [IO.File]::Copy(($zip+'.sha256'),($bad+'.sha256'))
@@ -408,6 +413,13 @@ if ($Suite -in @('UI','All')) {
         $run=Setup-Ui; [IO.File]::AppendAllText("$script:UiRoot/Shelf1/Shelf.ini",'DO-NOT-DISPLAY-CONTENT')
         Assert-True ((& $run) -eq 1) 'custom source not refused'
         Assert-True (($script:UiMessages -join "`n").IndexOf('DO-NOT-DISPLAY-CONTENT') -lt 0 -and ($script:UiMessages -join "`n").IndexOf('Shelf1/Shelf.ini') -ge 0) 'error exposed contents or omitted filename'
+    }
+    Test-Case 'IncompleteBackupHasClearFailureGuidance' {
+        $run=Setup-Ui; $script:UiConfirm=$true
+        $module=Get-Module Updater; & $module { function script:Write-F1New { throw 'fixture backup write failure' } }
+        Assert-True ((& $run) -eq 1) 'backup failure not reported'
+        $text=$script:UiMessages -join "`n"
+        Assert-True ($text.IndexOf('incomplete') -ge 0 -and $text.IndexOf('Read RESTORE.txt') -lt 0) 'incomplete backup references nonexistent restore record'
     }
     Test-Case 'LauncherUsesBuiltinPowerShellAndDifferentWorkingDirectory' {
         $launch=Join-Path $scratch ('launcher space '+[char]0xe9); [IO.Directory]::CreateDirectory($launch) | Out-Null

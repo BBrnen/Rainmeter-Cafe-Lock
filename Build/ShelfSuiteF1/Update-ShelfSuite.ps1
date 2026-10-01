@@ -38,7 +38,11 @@ function Invoke-F1GuidedUpdate {
         if ($result.Status -eq 'Updated') { Show-F1Message ("Update verified. Keep your backup:`r`n"+$result.BackupDirectory+"`r`n`r`nStart Rainmeter yourself and perform the README's manual checks."); return 0 }
         if ($result.Status -eq 'NoAction') { Show-F1Message 'No action needed. No backup created.'; return 0 }
         $text=($result.Errors -join "`r`n")
-        if ($result.BackupDirectory) { $text += "`r`n`r`nKeep this backup:`r`n"+$result.BackupDirectory+"`r`nRead RESTORE.txt for manual recovery." }
+        if ($result.BackupDirectory) {
+            $text += "`r`n`r`nKeep this backup:`r`n"+$result.BackupDirectory
+            if ([IO.File]::Exists((Join-Path $result.BackupDirectory 'RESTORE.txt'))) { $text += "`r`nRead RESTORE.txt for manual recovery." }
+            else { $text += "`r`nBackup preparation is incomplete; installed files were not replaced. Do not restore from this incomplete backup. Resolve the reported failure before retrying." }
+        }
         if ($result.Status -eq 'FailedRecovered') { $text += "`r`nNo updater changes remain in installed files; inspect any outside edits before retrying." }
         else { $text += "`r`nManual inspection/restore required for:`r`n"+($result.ManualRecoveryPaths -join "`r`n") }
         Show-F1Message $text $true
