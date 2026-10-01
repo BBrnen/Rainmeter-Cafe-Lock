@@ -1,6 +1,7 @@
 param(
-    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'All')]
-    [string]$Suite = 'Protocol'
+    [ValidateSet('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage', 'F1Compatibility', 'All')]
+    [string]$Suite = 'Protocol',
+    [string]$UpstreamDirectory
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -10,6 +11,62 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $output
 try {
     $tests = if ($Suite -eq 'All') { @('Protocol', 'HostPolicy', 'Controller', 'Selection', 'Host', 'Browser', 'Launcher', 'Icons', 'Config', 'Storage') } else { @($Suite) }
+    if ($tests -contains 'F1Compatibility') {
+        if (-not $UpstreamDirectory) { throw 'F1Compatibility requires the disposable patched ShelfSuite checkout.' }
+        $upstream = (Resolve-Path $UpstreamDirectory).Path
+        $payload = Join-Path $repo 'ThirdParty/ShelfSuite/F1Compatibility'
+        $fixtureScript = Join-Path $repo 'Tests/CafeShelfF1CompatibilityFixtures.ps1'
+        $compilerArgs = @('/nologo', '/EHsc', '/W4', '/WX', '/DNOMINMAX', '/utf-8',
+            "$repo/Tests/CafeShelfF1Compatibility.cpp", "$repo/Library/CafeShelf/F1Compatibility.cpp",
+            '/Fe:CafeShelfF1Compatibility.exe', '/link', 'bcrypt.lib')
+        & cl.exe @compilerArgs
+        if ($LASTEXITCODE -ne 0) { throw 'CafeShelf F1Compatibility compilation failed' }
+        function New-F1Fixture([string]$Name) {
+            return (& $fixtureScript -Directory (Join-Path $output $Name) -UpstreamDirectory $upstream -PayloadDirectory $payload)
+        }
+        $root = New-F1Fixture ('F1-' + [guid]::NewGuid().ToString('N'))
+        $config = [IO.File]::Open((Join-Path $root 'Shelf1/config.lua'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $icon = [IO.File]::Open((Join-Path $root '@Resources/Icons/sentinel.png'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $theme = [IO.File]::Open((Join-Path $root '@Resources/Themes/sentinel.inc'), [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        try {
+            & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload preview 5 2
+            if ($LASTEXITCODE -ne 0) { throw 'Mixed ShelfN recognition failed' }
+        } finally { $theme.Dispose(); $icon.Dispose(); $config.Dispose() }
+        function Set-F1Fixture([string]$FixtureRoot) {
+            foreach ($relative in @('@Resources/ShelfEngine.lua', '@Resources/Variables.inc')) {
+                Copy-Item -LiteralPath (Join-Path $payload ('payload/' + $relative)) -Destination (Join-Path $FixtureRoot $relative) -Force
+            }
+            foreach ($ini in Get-ChildItem -LiteralPath $FixtureRoot -Directory -Filter 'Shelf*' | ForEach-Object { Join-Path $_.FullName 'Shelf.ini' }) {
+                $bytes = [IO.File]::ReadAllBytes($ini)
+                $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
+                $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+                $text = $text.Replace("AccurateText=1$newline", "AccurateText=1${newline}DynamicWindowSize=1${newline}")
+                [IO.File]::WriteAllBytes($ini, [Text.UTF8Encoding]::new($false).GetBytes($text))
+            }
+        }
+        Set-F1Fixture $root
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload already 0 7
+        if ($LASTEXITCODE -ne 0) { throw 'Manually F1-updated fixture was not a no-op' }
+        $partial = New-F1Fixture ('F1-partial-' + [guid]::NewGuid().ToString('N'))
+        Set-F1Fixture $partial
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/Variables.inc') -Destination (Join-Path $partial '@Resources/Variables.inc') -Force
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $partial) $payload preview 1 6
+        if ($LASTEXITCODE -ne 0) { throw 'Known partial F1 fixture was not recognized' }
+        $before = @(Get-ChildItem -LiteralPath $root -Recurse -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { $_.Path + '|' + $_.Hash })
+        New-Item -ItemType Directory -Path (Join-Path $root 'Shelf99') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $root 'Shelf99/Shelf.ini'), '[Rainmeter]', [Text.UTF8Encoding]::new($false))
+        & ./CafeShelfF1Compatibility.exe (Split-Path -Parent $root) $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'Unexpected additional shelf was accepted' }
+        $after = @(Get-ChildItem -LiteralPath $root -Recurse -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { $_.Path + '|' + $_.Hash })
+        if (@(Compare-Object $before $after | Where-Object { $_.InputObject -notmatch 'Shelf99\\Shelf.ini\|' }).Count) { throw 'Refusal changed an existing fixture file' }
+        $empty = Join-Path $output ('F1-empty-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path (Join-Path $empty 'Skins/Shelf Suite/@Resources') -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/ShelfEngine.lua') -Destination (Join-Path $empty 'Skins/Shelf Suite/@Resources/ShelfEngine.lua')
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/@Resources/Variables.inc') -Destination (Join-Path $empty 'Skins/Shelf Suite/@Resources/Variables.inc')
+        & ./CafeShelfF1Compatibility.exe (Join-Path $empty 'Skins') $payload refused 0 0
+        if ($LASTEXITCODE -ne 0) { throw 'No-shelf fixture was accepted' }
+        Write-Host 'PASS F1Compatibility: recognized Shelf1, Shelf2, Shelf3, Shelf4, and Shelf27 by complete contents; refused unknown Shelf99 and no-shelf fixtures without reading locked config, icon, or theme sentinels.'
+    }
     if ($tests -contains 'Selection' -or $tests -contains 'Host' -or $tests -contains 'Browser') {
         & "$repo/Build/CafeDependencies/Restore.ps1"
         $sdk = Join-Path $repo 'work-package/dependencies/Microsoft.Web.WebView2.1.0.4258.31'

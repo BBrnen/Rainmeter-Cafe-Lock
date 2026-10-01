@@ -64,6 +64,11 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
     </ClCompile>
+    <ClCompile Include="CafeShelf\F1Compatibility.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NOMINMAX</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="CafeShelf\Config.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -180,6 +185,7 @@
     <ClInclude Include="CafeShelf\Icons.h" />
     <ClInclude Include="CafeShelf\Config.h" />
     <ClInclude Include="CafeShelf\Storage.h" />
+    <ClInclude Include="CafeShelf\F1Compatibility.h" />
     <ClInclude Include="CafeShelf\ShelfTemplate.h" />
     <ClInclude Include="CafeShelf\Json.h" />
     <ClInclude Include="CafeShelf\Types.h" />
