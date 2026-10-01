@@ -10,7 +10,34 @@ function Run-Setup {
  $p = Start-Process $setup -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
  if ($p.ExitCode -ne 0) { throw "Setup failed: $($p.ExitCode)" }
 }
+function Assert-F1Bundle {
+ $bundle = Join-Path $installed 'Compatibility/ShelfSuiteF1'
+ $expected = @('manifest.json','README.md','LICENSE-ShelfSuite.txt','payload/@Resources/ShelfEngine.lua','payload/@Resources/Variables.inc')
+ foreach ($relative in $expected) {
+  $target = Join-Path $bundle $relative
+  if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw "F1BundleInstalledAndProtected: missing $relative" }
+  if ((Get-FileHash -LiteralPath $target).Hash -ne (Get-FileHash -LiteralPath (Join-Path "$repo/ThirdParty/ShelfSuite/F1Compatibility" $relative)).Hash) { throw "F1 bundle bytes differ: $relative" }
+ }
+ $actual = @(Get-ChildItem -LiteralPath $bundle -Recurse -Force -File)
+ if ($actual.Count -ne $expected.Count) { throw 'F1 bundle contains unexpected files' }
+ Write-Output 'PASS F1BundleInstalledAndProtected: exact runtime allowlist and source bytes.'
+ return $bundle
+}
 if ($Standard) {
+ [void](Assert-F1Bundle)
+ $bundle = Join-Path $installed 'Compatibility/ShelfSuiteF1'
+ foreach ($target in @(Get-ChildItem -LiteralPath $bundle -Recurse -File)) {
+  $denied = $false
+  try { $f = [IO.File]::Open($target.FullName,'Open','Write'); $f.Dispose() } catch [UnauthorizedAccessException] { $denied = $true }
+  if (-not $denied) { throw "Standard user could alter F1 data: $($target.Name)" }
+  $denied = $false
+  try { [IO.File]::Delete($target.FullName) } catch [UnauthorizedAccessException] { $denied = $true }
+  if (-not $denied) { throw "Standard user could replace F1 data: $($target.Name)" }
+ }
+ $denied = $false
+ try { [IO.File]::WriteAllText((Join-Path $bundle 'unexpected-probe.txt'),'must not succeed') } catch [UnauthorizedAccessException] { $denied = $true }
+ if (-not $denied) { throw 'Standard user could add F1 bundle files' }
+ Write-Output 'PASS StandardUserCanReadButCannotAlterF1Bundle.'
  $probe = Join-Path $installed 'customer-write-probe.txt'
  $denied = $false
  try { [IO.File]::WriteAllText($probe,'must not succeed') } catch [UnauthorizedAccessException] { $denied = $true }
@@ -42,7 +69,23 @@ if ($Standard) {
 }
 if (Test-Path $installed) { throw 'Runner already has Cafe Lock installed; refusing to alter it' }
 if (Test-Path $profile) { throw 'Runner already has a Cafe Lock profile' }
+# Only CI creates/reads these disposable sentinels. Product installation must
+# never inspect user shelves, launcher configuration or compatibility backups.
+$fixture = Join-Path $env:RUNNER_TEMP ('CafeInstaller-F1-' + [guid]::NewGuid().ToString('N'))
+$sentinels = @('Skins/Shelf Suite/Shelf1/config.lua','Skins/Shelf Suite/@Resources/Icons/personal.png','Skins/Shelf Suite/@Resources/Themes/personal.inc','Skins/Shelf Suite-F1-Backup-fixture/RESTORE.txt','Rainmeter.ini','CafeLock.ini')
+foreach ($relative in $sentinels) {
+ $target = Join-Path $fixture $relative
+ New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+ [IO.File]::WriteAllText($target, ('isolated installer preservation sentinel: ' + $relative))
+}
+function Fixture-Hashes {
+ return (@(Get-ChildItem -LiteralPath $fixture -Recurse -Force -File | Sort-Object FullName | ForEach-Object { [IO.Path]::GetRelativePath($fixture,$_.FullName) + ':' + (Get-FileHash -LiteralPath $_.FullName).Hash }) -join '|')
+}
+$fixtureBefore = Fixture-Hashes
 Run-Setup
+[void](Assert-F1Bundle)
+if ((Fixture-Hashes) -ne $fixtureBefore) { throw 'InstallerNeverTouchesUserShelfSuite failed' }
+Write-Output 'PASS InstallerNeverTouchesUserShelfSuite.'
 foreach ($path in @('Rainmeter.exe','Rainmeter.dll','SkinInstaller.exe','RestartRainmeter.exe','Uninstall.exe','LICENSE','Defaults/Skins/illustro','Languages/1033.dll','Notices/WebView2-LICENSE.txt','Notices/WebView2-NOTICE.txt','Notices/ShelfSuite-LICENSE.txt','Notices/WebView2-runtime-manifest.json')) {
  if (-not (Test-Path "$installed/$path")) { throw "Missing installed file: $path" }
 }
@@ -71,12 +114,18 @@ try {
  if ($attempt.ExitCode -ne 1618 -or $p.HasExited) { throw 'Running-instance update refusal failed' }
 } finally { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } }
 Run-Setup
+[void](Assert-F1Bundle)
+if ((Fixture-Hashes) -ne $fixtureBefore) { throw 'UpgradePreservesExistingShelfSuiteAndBackup failed' }
+Write-Output 'PASS UpgradePreservesExistingShelfSuiteAndBackup.'
 if (-not (Test-Path $startupLink)) { throw 'Upgrade lost automatic startup' }
 if ((Get-FileHash "$profile/installer-preservation-test.txt").Hash -ne $before.Hash) { throw 'Upgrade modified profile data' }
 # Unknown installation files are preserved by the generated uninstall manifest.
 'preserve unknown file' | Set-Content "$installed/unknown-test.txt"
 $uninstall = Start-Process "$installed/Uninstall.exe" -ArgumentList '/S',"_?=$installed" -WindowStyle Hidden -Wait -PassThru
 if ($uninstall.ExitCode -ne 0) { throw 'Uninstall failed' }
+if (Test-Path "$installed/Compatibility/ShelfSuiteF1") { throw 'Uninstall left owned F1 bundle data' }
+if ((Fixture-Hashes) -ne $fixtureBefore) { throw 'UninstallLeavesUserShelfSuiteAndBackup failed' }
+Write-Output 'PASS UninstallLeavesUserShelfSuiteAndBackup.'
 if (Test-Path "$installed/Rainmeter.exe") { throw 'Uninstall left the application binary' }
 if (Test-Path $key) { throw 'Uninstall left registration' }
 if (Test-Path $link) { throw 'Uninstall left shortcut' }
