@@ -29,6 +29,17 @@ struct CatalogEntry
 	bool shared = false;
 };
 
+struct Handle
+{
+	HANDLE value = INVALID_HANDLE_VALUE;
+	explicit Handle(HANDLE handle) : value(handle) {}
+	Handle(const Handle&) = delete;
+	Handle& operator=(const Handle&) = delete;
+	Handle(Handle&& other) noexcept : value(other.value) { other.value = INVALID_HANDLE_VALUE; }
+	~Handle() { if (value != INVALID_HANDLE_VALUE) CloseHandle(value); }
+};
+using Pins = std::vector<Handle>;
+
 std::wstring ToWide(const std::string& value)
 {
 	return std::wstring(value.begin(), value.end());
@@ -52,28 +63,52 @@ std::wstring JoinPath(const std::wstring& left, const std::wstring& right)
 
 std::wstring FullPath(const std::wstring& path)
 {
-	const DWORD length = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+	std::wstring ordinary = path;
+	std::replace(ordinary.begin(), ordinary.end(), L'/', L'\\');
+	while (ordinary.size() > 3 && ordinary.back() == L'\\') ordinary.pop_back();
+	if (ordinary.size() <= 3 || ordinary.size() >= 30000 || ordinary[1] != L':' || ordinary[2] != L'\\' ||
+		!((ordinary[0] >= L'A' && ordinary[0] <= L'Z') || (ordinary[0] >= L'a' && ordinary[0] <= L'z')) ||
+		ordinary.find_first_of(L"?*\r\n\"<>|") != std::wstring::npos || ordinary.find(L'\0') != std::wstring::npos ||
+		ordinary.find(L':', 2) != std::wstring::npos) throw std::runtime_error("not an ordinary local path");
+	for (size_t start = 3; start < ordinary.size();)
+	{
+		const auto end = ordinary.find(L'\\', start);
+		const auto component = ordinary.substr(start, end == std::wstring::npos ? ordinary.size() - start : end - start);
+		if (component.empty() || component == L"." || component == L".." || component.back() == L'.' || component.back() == L' ')
+			throw std::runtime_error("ambiguous path");
+		start = end == std::wstring::npos ? ordinary.size() : end + 1;
+	}
+	const DWORD length = GetFullPathNameW(ordinary.c_str(), 0, nullptr, nullptr);
 	if (!length || length >= 30000) throw std::runtime_error("invalid path");
 	std::wstring result(length, L'\0');
-	if (!GetFullPathNameW(path.c_str(), length, &result[0], nullptr)) throw std::runtime_error("invalid path");
+	if (!GetFullPathNameW(ordinary.c_str(), length, &result[0], nullptr)) throw std::runtime_error("invalid path");
 	result.resize(wcslen(result.c_str()));
 	return result;
 }
 
-void VerifyDirectory(const std::wstring& path)
+void PinDirectories(const std::wstring& path, Pins& pins)
 {
 	const auto full = FullPath(path);
 	const auto drive = full.size() >= 3 ? full.substr(0, 3) : std::wstring();
 	if (drive.empty() || GetDriveTypeW(drive.c_str()) != DRIVE_FIXED) throw std::runtime_error("not a local fixed disk");
-	HANDLE handle = CreateFileW(full.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
-		nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-	if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("directory unavailable");
+	for (size_t end = 2; end < full.size();)
+	{
+	end = full.find(L'\\', end + 1);
+	const auto prefix = end == std::wstring::npos ? full : full.substr(0, end);
+	Handle handle(CreateFileW(prefix.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+	if (handle.value == INVALID_HANDLE_VALUE) throw std::runtime_error("directory unavailable");
 	BY_HANDLE_FILE_INFORMATION info{};
-	const bool valid = GetFileInformationByHandle(handle, &info) &&
+	const bool valid = GetFileInformationByHandle(handle.value, &info) &&
 		(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
 		(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0;
-	CloseHandle(handle);
 	if (!valid) throw std::runtime_error("directory redirected");
+	ULONG flags = 0;
+	if (GetFileInformationByHandleEx(handle.value, static_cast<FILE_INFO_BY_HANDLE_CLASS>(23), &flags, sizeof(flags)) && (flags & 1))
+		throw std::runtime_error("case-sensitive directory");
+	pins.push_back(std::move(handle));
+	if (end == std::wstring::npos) break;
+	}
 }
 
 std::vector<unsigned char> ReadTarget(const std::wstring& path)
@@ -136,7 +171,8 @@ bool IsExactPayloadPath(const std::string& path)
 
 std::vector<CatalogEntry> ReadCatalog(const std::wstring& payload)
 {
-	VerifyDirectory(payload);
+	Pins pins;
+	PinDirectories(JoinPath(payload, L"payload\\@Resources"), pins);
 	const auto manifestBytes = ReadTarget(JoinPath(payload, L"manifest.json"));
 	const std::string manifestText(manifestBytes.begin(), manifestBytes.end());
 	const auto manifest = Json::parse(manifestText);
@@ -197,24 +233,25 @@ Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloa
 	{
 		const std::wstring skins = FullPath(skinPath);
 		const std::wstring root = JoinPath(skins, ShelfRootName);
-		VerifyDirectory(skins);
-		VerifyDirectory(root);
+		Pins pins;
+		PinDirectories(JoinPath(root, L"@Resources"), pins);
 		const auto catalog = ReadCatalog(FullPath(payloadPath));
 		std::vector<std::wstring> targets{ L"@Resources\\ShelfEngine.lua", L"@Resources\\Variables.inc" };
 		size_t shelves = 0;
 		WIN32_FIND_DATAW child{};
 		HANDLE find = FindFirstFileW(JoinPath(root, L"Shelf*").c_str(), &child);
+		struct FindGuard { HANDLE handle; ~FindGuard() { if (handle != INVALID_HANDLE_VALUE) FindClose(handle); } } findGuard{ find };
 		if (find != INVALID_HANDLE_VALUE)
 		{
 			do
 			{
 				const std::wstring name(child.cFileName);
 				if (!IsShelfName(name)) continue;
-				VerifyDirectory(JoinPath(root, name));
+				PinDirectories(JoinPath(root, name), pins);
 				targets.push_back(name + L"\\Shelf.ini");
 				++shelves;
 			} while (FindNextFileW(find, &child));
-			FindClose(find);
+			if (GetLastError() != ERROR_NO_MORE_FILES) throw std::runtime_error("shelf enumeration failed");
 		}
 		if (!shelves) return Refuse(L"No Shelf<number> folders were found. No files were changed.");
 		Preview preview;
