@@ -37,6 +37,20 @@ public static class CafeF1TestToken {
     [DllImport("advapi32.dll",SetLastError=true)] static extern bool OpenProcessToken(IntPtr process,uint access,out IntPtr token);
     [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern uint GetShortPathName(string path,System.Text.StringBuilder buffer,uint size);
+    public static string ShortPath(string path) {
+        var buffer=new System.Text.StringBuilder(32768);
+        uint size=GetShortPathName(path,buffer,(uint)buffer.Capacity);
+        if(size==0 || size>=buffer.Capacity) throw new System.ComponentModel.Win32Exception();
+        return buffer.ToString();
+    }
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetKernelObjectSecurity(IntPtr handle,uint info,byte[] buffer,uint length,out uint needed);
+    public static string ProcessAcl() {
+        uint needed; GetKernelObjectSecurity(GetCurrentProcess(),4,null,0,out needed);
+        byte[] bytes=new byte[needed];
+        if(!GetKernelObjectSecurity(GetCurrentProcess(),4,bytes,needed,out needed)) return "query error="+Marshal.GetLastWin32Error();
+        return new System.Security.AccessControl.RawSecurityDescriptor(bytes,0).GetSddlForm(System.Security.AccessControl.AccessControlSections.Access);
+    }
     [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetTokenInformation(IntPtr token,int type,IntPtr buffer,int length,out int needed);
     [DllImport("advapi32.dll")] static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
     [DllImport("advapi32.dll")] static extern IntPtr GetSidSubAuthority(IntPtr sid,uint index);

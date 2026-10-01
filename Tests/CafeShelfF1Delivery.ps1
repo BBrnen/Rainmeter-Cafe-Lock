@@ -17,6 +17,7 @@ if ($StandardUser) {
     Assert-True ($PackageDirectory -and [IO.Path]::GetFullPath($PackageDirectory).StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)) 'standard-user tests must load extracted package inside RUNNER_TEMP'
     Assert-True ($FixtureBuildDirectory -and [IO.Path]::GetFullPath($FixtureBuildDirectory).StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)) 'standard-user fixtures must be prepared inside RUNNER_TEMP'
     Write-Output 'PASS standard-user runtime: Windows PowerShell 5.1, admin=false, integrity RID=8192, extracted package'
+    Write-Output ('CI child-process diagnostic: user='+[Security.Principal.WindowsIdentity]::GetCurrent().User.Value+' process DACL='+[CafeF1TestToken]::ProcessAcl()+' ComSpec='+$env:ComSpec)
 }
 $script:Passed = 0
 $repo = Split-Path $PSScriptRoot -Parent
@@ -248,6 +249,13 @@ if ($Suite -in @('Preflight','All')) {
     }
     Test-Case 'SpacesAndNonEnglishPath' { $root=New-SkinFixture "$scratch/space café" $upstream; Assert-True ((Get-F1Preflight $root (Read-F1Package $PackageDirectory)).Changes.Count -eq 5) 'Unicode path failed' }
     Test-Case 'PackageInsideSkinRefused' { $root=Skin; Copy-Item $PackageDirectory "$root/package" -Recurse; Assert-Refused { Get-F1Preflight $root (Read-F1Package "$root/package") } 'package inside skin' }
+    Test-Case 'TrailingSeparatorCannotHidePackageInsideSkin' { $root=Skin; Copy-Item $PackageDirectory "$root/package" -Recurse; Assert-Refused { Get-F1Preflight ($root+'\') (Read-F1Package "$root/package") } 'package inside trailing-separated root' }
+    Test-Case 'AvailableShortNameAliasRefused' {
+        $root=Skin; $short=[CafeF1TestToken]::ShortPath($root)
+        if (-not $short.Equals($root,[StringComparison]::OrdinalIgnoreCase)) {
+            Assert-Refused { Get-F1Preflight $short (Read-F1Package $PackageDirectory) } 'short-name alias'
+        } else { Write-Output 'NOTE this fixture volume did not generate an 8.3 alias; ordinary long path remains recognized' }
+    }
     Test-Case 'HardLinkRefused' {
         $root=Skin; $path="$root/Shelf1/Shelf.ini"
         New-Item -ItemType HardLink -Path "$root/Shelf1/linked.ini" -Target $path | Out-Null
@@ -263,6 +271,13 @@ if ($Suite -in @('Preflight','All')) {
 if ($Suite -in @('Apply','All')) {
     Import-Module "$PackageDirectory/Updater.psm1" -Force
     Assert-True ($null -ne (Get-Command Invoke-F1Update -ErrorAction SilentlyContinue)) 'verified backup/apply must exist'
+    Test-Case 'TrailingSeparatorBackupRemainsSibling' {
+        $root=New-SkinFixture (Join-Path $scratch ([Guid]::NewGuid().ToString('N'))) $upstream
+        $plan=Get-F1Preflight ($root+'\') (Read-F1Package $PackageDirectory)
+        $module=Get-Module Updater; & $module { function script:Assert-F1RainmeterClosed {} }
+        $result=Invoke-F1Update $plan
+        Assert-True ($result.Status -eq 'Updated' -and [IO.Path]::GetDirectoryName($result.BackupDirectory) -ceq [IO.Path]::GetDirectoryName($root)) 'backup was not beside Shelf Suite'
+    }
     function Apply-Skin { return New-SkinFixture (Join-Path $scratch ([Guid]::NewGuid().ToString('N'))) $upstream }
     function Apply-Module {
         Import-Module "$PackageDirectory/Updater.psm1" -Force

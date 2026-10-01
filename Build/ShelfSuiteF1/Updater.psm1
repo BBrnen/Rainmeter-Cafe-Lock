@@ -6,7 +6,8 @@ function Get-F1Hash([byte[]]$Bytes) {
     try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
 }
 function Assert-F1PlainPath([string]$Path) {
-    $full=[IO.Path]::GetFullPath($Path)
+    $full=[CafeF1FileInfo]::LexicalPath($Path)
+    if ($full.Length -gt 3) { $full=$full.TrimEnd('\') }
     if ($full -notmatch '^[A-Za-z]:\\' -or (New-Object IO.DriveInfo($full.Substring(0,3))).DriveType -ne 'Fixed') { throw 'Select a local fixed-disk directory.' }
     $item=$full
     while ($item) {
@@ -15,6 +16,7 @@ function Assert-F1PlainPath([string]$Path) {
         } else { throw 'Required path is missing.' }
         $item=[IO.Path]::GetDirectoryName($item)
     }
+    if (-not $full.Equals([CafeF1FileInfo]::Canonical($full),[StringComparison]::OrdinalIgnoreCase)) { throw 'Path alias refused. Select the original long-named path.' }
     return $full
 }
 function Read-F1Package([string]$PackageDirectory) {
@@ -65,6 +67,25 @@ public static class CafeF1FileInfo {
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
     static extern SafeFileHandle CreateFile(string path,uint access,uint share,IntPtr security,uint mode,uint flags,IntPtr template);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetFileInformationByHandle(SafeFileHandle file,out Info info);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern uint GetFinalPathNameByHandle(SafeFileHandle file,System.Text.StringBuilder path,uint size,uint flags);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern uint GetFullPathName(string path,uint size,System.Text.StringBuilder result,IntPtr part);
+    public static string LexicalPath(string path) {
+        var result=new System.Text.StringBuilder(32768);
+        uint size=GetFullPathName(path,(uint)result.Capacity,result,IntPtr.Zero);
+        if(size==0 || size>=result.Capacity) throw new Win32Exception();
+        return result.ToString();
+    }
+    public static string Canonical(string path) {
+        using(var file=CreateFile(path,0,7,IntPtr.Zero,3,0x02200000,IntPtr.Zero)) {
+            if(file.IsInvalid) throw new Win32Exception();
+            var result=new System.Text.StringBuilder(32768);
+            uint size=GetFinalPathNameByHandle(file,result,(uint)result.Capacity,0);
+            if(size==0 || size>=result.Capacity) throw new Win32Exception();
+            string full=result.ToString();
+            if(!full.StartsWith(@"\\?\")) throw new InvalidOperationException("Unexpected path form");
+            return full.Substring(4);
+        }
+    }
     public static string Identity(string path) {
         using (var file=CreateFile(path,0,7,IntPtr.Zero,3,0x02200000,IntPtr.Zero)) {
             Info info;
