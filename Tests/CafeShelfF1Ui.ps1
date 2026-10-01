@@ -120,6 +120,7 @@ try {
     $control = [LockNative]::FindWindow('DummyRainWClass','Rainmeter control window')
     Wait-For { [LockNative]::FindWindow('RainmeterMeterWindow',"$shelf\Shelf1\Shelf.ini") -ne [IntPtr]::Zero } 'loaded stock Shelf1'
     $window = [LockNative]::FindWindow('RainmeterMeterWindow',"$shelf\Shelf1\Shelf.ini")
+    Wait-For { (Position $window) -eq '100,100' } 'configured Shelf1 startup position'
     $position = Position $window
     Write-Output ("F1 fixture startup position: " + $position)
     [void][LockNative]::Send($tray,0x111,118,0)
