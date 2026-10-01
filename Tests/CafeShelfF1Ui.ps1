@@ -44,9 +44,35 @@ WindowY=350
 . "$PSScriptRoot/CafeTestUi.ps1"
 Add-Type @'
 using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 public static class F1UiNative {
  [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr window);
+ [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr window,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
+ public static string RevokedPhase;
+ public static string RevokedRecord;
+ public static Task<bool> LockDuringApply(IntPtr tray,string skins) {
+  return Task.Run(()=> {
+   var deadline=DateTime.UtcNow.AddSeconds(60);
+   while(DateTime.UtcNow<deadline) {
+    foreach(var backup in Directory.GetDirectories(skins,"Shelf Suite-F1-Backup-*")) {
+     var record=Path.Combine(backup,"PHASE.txt");
+     string phase;
+     try { using(var stream=new FileStream(record,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete)) using(var reader=new StreamReader(stream)) phase=reader.ReadToEnd(); }
+     catch(IOException) { continue; }
+     if(!phase.Contains("MOVE ORIGINAL") || phase.Contains("COMPLETE")) continue;
+     IntPtr result;
+     if(SendMessageTimeout(tray,0x111,new IntPtr(4091),IntPtr.Zero,2,30000,out result)==IntPtr.Zero) return false;
+     using(var stream=new FileStream(record,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete)) using(var reader=new StreamReader(stream)) RevokedPhase=reader.ReadToEnd();
+     RevokedRecord=record; return true;
+    }
+    Thread.Sleep(1);
+   }
+   return false;
+  });
+ }
 }
 '@
 function Click($window) {
@@ -119,6 +145,26 @@ try {
     Open-Preview
     Result-Dialog 'Refused'
     if ((Backups).Count -ne 1) { throw 'Customized additional shelf created a backup.' }
+    # Restore only declared fixture targets, then use many recognized shelves
+    # to keep a real operation active while another thread sends Lock Now.
+    foreach ($relative in $targets) {
+        $source = if ($relative -like 'Shelf4/*' -or $relative -like 'Shelf27/*') { 'Shelf2/Shelf.ini' } else { $relative }
+        Copy-Item -LiteralPath (Join-Path $upstream "Shelf Suite/$source") -Destination (Join-Path $shelf $relative) -Force
+    }
+    foreach ($number in 100..600) {
+        New-Item -ItemType Directory -Path (Join-Path $shelf "Shelf$number") | Out-Null
+        Copy-Item -LiteralPath (Join-Path $upstream 'Shelf Suite/Shelf3/Shelf.ini') -Destination (Join-Path $shelf "Shelf$number/Shelf.ini")
+    }
+    Open-Preview
+    $preview = Password-Dialog 'ShelfSuite F1 compatibility'
+    $revocation = [F1UiNative]::LockDuringApply($tray,$skins)
+    Click ([LockNative]::Child($preview,'Apply'))
+    Wait-For { [LockNative]::FindWindow('#32770','ShelfSuite F1 - Manual recovery required') -ne [IntPtr]::Zero -or [LockNative]::FindWindow('#32770','ShelfSuite F1 - Refused') -ne [IntPtr]::Zero } 'revoked live operation result'
+    if (-not $revocation.Wait(10000) -or -not $revocation.Result) { throw 'Real Lock Now was not delivered during native application.' }
+    if ((Get-Content -LiteralPath ([F1UiNative]::RevokedRecord) -Raw) -ne [F1UiNative]::RevokedPhase) { throw 'Native operation wrote phase data after Lock Now returned.' }
+    if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Live Lock Now did not revoke Manage.' }
+    $status = if ([LockNative]::FindWindow('#32770','ShelfSuite F1 - Manual recovery required') -ne [IntPtr]::Zero) { 'Manual recovery required' } else { 'Refused' }
+    Result-Dialog $status
     Write-Output 'PASS F1 native standard-user live UI: locked/forged denial, preview/cancel, Lock Now revocation, busy refusal, additional shelves, update without automatic reload, already-compatible no-op, customized refusal.'
 } finally {
     $config.Dispose()
