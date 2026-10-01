@@ -1,0 +1,3 @@
+# The approved payload hashes describe exact LF bytes on every build machine.
+manifest.json text eol=lf
+payload/** text eol=lf
