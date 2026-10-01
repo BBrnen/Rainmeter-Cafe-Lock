@@ -103,6 +103,11 @@ void ApplyCase(const std::wstring& skins, const std::wstring& bundle, const std:
 			for (size_t i = 0; i < preview.changes.size(); ++i)
 				assert(Bytes(backup + L"\\" + preview.changes[i].relativePath) == originals[i]);
 			assert(GetFileAttributesW((backup + L"\\Shelf1\\config.lua").c_str()) == INVALID_FILE_ATTRIBUTES);
+			if (scenario == L"apply-backup-lease")
+			{
+				HANDLE competing = CreateFileW((backup + L"\\" + preview.changes.front().relativePath).c_str(), GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+				assert(competing == INVALID_HANDLE_VALUE && GetLastError() == ERROR_SHARING_VIOLATION);
+			}
 		}
 		if (step == L"before-backup" && scenario == L"apply-backup-failure") throw std::runtime_error("injected backup failure");
 		if (step == L"recovery-vacant" && scenario == L"apply-compete-recovery") OutsideWrite(path, "competing recovery file", true);

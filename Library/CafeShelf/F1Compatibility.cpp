@@ -583,6 +583,7 @@ Result<ApplyResult> Apply(const Preview& preview, const std::function<bool()>& a
 				Authorize(authorized);
 				Need(RenameBound(output.value, item.stagePath), "cannot retain own output for recovery");
 				item.placed = false;
+				Hook(L"recovery-vacant", target);
 			}
 			WriteFlush(phase.value, Utf8(L"RECOVER ORIGINAL " + item.change.relativePath + L"\r\n"), authorized);
 			Authorize(authorized);
