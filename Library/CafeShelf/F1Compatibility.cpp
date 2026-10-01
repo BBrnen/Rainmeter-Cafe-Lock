@@ -5,7 +5,7 @@
 #include <bcrypt.h>
 
 #include <algorithm>
-#include <filesystem>
+#include <cwchar>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -45,10 +45,25 @@ bool IsShelfName(const std::wstring& name)
 		std::all_of(name.begin() + 5, name.end(), [](wchar_t ch) { return ch >= L'0' && ch <= L'9'; });
 }
 
-void VerifyDirectory(const std::filesystem::path& path)
+std::wstring JoinPath(const std::wstring& left, const std::wstring& right)
 {
-	const auto full = std::filesystem::absolute(path);
-	const auto drive = full.root_path().wstring();
+	return left + (left.empty() || left.back() == L'\\' ? L"" : L"\\") + right;
+}
+
+std::wstring FullPath(const std::wstring& path)
+{
+	const DWORD length = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+	if (!length || length >= 30000) throw std::runtime_error("invalid path");
+	std::wstring result(length, L'\0');
+	if (!GetFullPathNameW(path.c_str(), length, &result[0], nullptr)) throw std::runtime_error("invalid path");
+	result.resize(wcslen(result.c_str()));
+	return result;
+}
+
+void VerifyDirectory(const std::wstring& path)
+{
+	const auto full = FullPath(path);
+	const auto drive = full.size() >= 3 ? full.substr(0, 3) : std::wstring();
 	if (drive.empty() || GetDriveTypeW(drive.c_str()) != DRIVE_FIXED) throw std::runtime_error("not a local fixed disk");
 	HANDLE handle = CreateFileW(full.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
 		nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -61,7 +76,7 @@ void VerifyDirectory(const std::filesystem::path& path)
 	if (!valid) throw std::runtime_error("directory redirected");
 }
 
-std::vector<unsigned char> ReadTarget(const std::filesystem::path& path)
+std::vector<unsigned char> ReadTarget(const std::wstring& path)
 {
 	HANDLE handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
 		FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -119,10 +134,10 @@ bool IsExactPayloadPath(const std::string& path)
 	return path == "payload/@Resources/ShelfEngine.lua" || path == "payload/@Resources/Variables.inc";
 }
 
-std::vector<CatalogEntry> ReadCatalog(const std::filesystem::path& payload)
+std::vector<CatalogEntry> ReadCatalog(const std::wstring& payload)
 {
 	VerifyDirectory(payload);
-	const auto manifestBytes = ReadTarget(payload / L"manifest.json");
+	const auto manifestBytes = ReadTarget(JoinPath(payload, L"manifest.json"));
 	const std::string manifestText(manifestBytes.begin(), manifestBytes.end());
 	const auto manifest = Json::parse(manifestText);
 	if (manifest.value("SchemaVersion", 0) != 1 || manifest.value("UpstreamRevision", "") != UpstreamRevision ||
@@ -138,7 +153,7 @@ std::vector<CatalogEntry> ReadCatalog(const std::filesystem::path& payload)
 		const auto path = item.at("Path").get<std::string>();
 		const auto expected = ToWide(item.at("Hash").get<std::string>());
 		if (!IsExactPayloadPath(path) || std::find(filePaths.begin(), filePaths.end(), path) != filePaths.end() ||
-			Sha256(ReadTarget(payload / ToWide(path))) != expected)
+			Sha256(ReadTarget(JoinPath(payload, ToWide(path)))) != expected)
 		{
 			throw std::runtime_error("untrusted payload file");
 		}
@@ -180,34 +195,40 @@ Result<Preview> Inspect(const std::wstring& skinPath, const std::wstring& payloa
 {
 	try
 	{
-		const std::filesystem::path skins = std::filesystem::absolute(skinPath);
-		const std::filesystem::path root = skins / ShelfRootName;
+		const std::wstring skins = FullPath(skinPath);
+		const std::wstring root = JoinPath(skins, ShelfRootName);
 		VerifyDirectory(skins);
 		VerifyDirectory(root);
-		const auto catalog = ReadCatalog(std::filesystem::absolute(payloadPath));
+		const auto catalog = ReadCatalog(FullPath(payloadPath));
 		std::vector<std::wstring> targets{ L"@Resources\\ShelfEngine.lua", L"@Resources\\Variables.inc" };
 		size_t shelves = 0;
-		for (const auto& child : std::filesystem::directory_iterator(root))
+		WIN32_FIND_DATAW child{};
+		HANDLE find = FindFirstFileW(JoinPath(root, L"Shelf*").c_str(), &child);
+		if (find != INVALID_HANDLE_VALUE)
 		{
-			const auto name = child.path().filename().wstring();
-			if (!IsShelfName(name)) continue;
-			VerifyDirectory(child.path());
-			targets.push_back(name + L"\\Shelf.ini");
-			++shelves;
+			do
+			{
+				const std::wstring name(child.cFileName);
+				if (!IsShelfName(name)) continue;
+				VerifyDirectory(JoinPath(root, name));
+				targets.push_back(name + L"\\Shelf.ini");
+				++shelves;
+			} while (FindNextFileW(find, &child));
+			FindClose(find);
 		}
 		if (!shelves) return Refuse(L"No Shelf<number> folders were found. No files were changed.");
 		Preview preview;
 		preview.status = Status::Preview;
-		preview.shelfRoot = root.wstring();
-		preview.proposedBackup = (root.parent_path() / L"Shelf Suite-F1-Backup-after-confirmation").wstring();
+		preview.shelfRoot = root;
+		preview.proposedBackup = JoinPath(skins, L"Shelf Suite-F1-Backup-after-confirmation");
 		for (const auto& relative : targets)
 		{
-			const auto hash = Sha256(ReadTarget(root / relative));
+			const auto hash = Sha256(ReadTarget(JoinPath(root, relative)));
 			const bool shared = relative.rfind(L"@Resources\\", 0) == 0;
 			std::vector<const CatalogEntry*> matches;
 			for (const auto& entry : catalog)
 			{
-				const auto expectedPath = std::wstring(relative.begin(), relative.end());
+				auto expectedPath = relative; std::replace(expectedPath.begin(), expectedPath.end(), L'\\', L'/');
 				if (entry.shared == shared && entry.inputHash == hash && (!shared || entry.path == expectedPath)) matches.push_back(&entry);
 			}
 			if (matches.size() != 1) return Refuse(relative + L" is missing, busy, unreadable, or not an approved ShelfSuite v2.1/F1 file. No files were changed.");
