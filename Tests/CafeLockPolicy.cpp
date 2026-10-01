@@ -12,6 +12,15 @@ int main()
 	assert(!CafeLock::AllowsF1Compatibility());
 	locked = false;
 	assert(CafeLock::AllowsF1Compatibility());
+	bool cancelled = false, dispatched = false;
+	assert(!CafeLock::AllowsF1Compatibility(cancelled, []() { locked = true; }));
+	locked = false;
+	assert(!CafeLock::AllowsF1Compatibility(cancelled, [&cancelled]() { cancelled = true; }));
+	assert(!CafeLock::AllowsF1Compatibility(cancelled, [&dispatched]() { dispatched = true; }));
+	assert(!dispatched);
+	cancelled = false;
+	assert(CafeLock::AllowsF1Compatibility(cancelled, [&dispatched]() { dispatched = true; }));
+	assert(dispatched);
 	locked = true;
 	assert(!CafeLock::AllowsF1Compatibility());
 	assert(!CafeLock::AllowsBang(Bang::Manage));
