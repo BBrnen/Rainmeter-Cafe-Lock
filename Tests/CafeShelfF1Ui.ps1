@@ -79,20 +79,20 @@ try {
     [LockNative]::Bang($control,'!Manage Settings')
     $dialog = Password-Dialog 'Create Cafe Lock Password'
     if ([LockNative]::FindWindow('#32770','Manage Rainmeter') -ne [IntPtr]::Zero) { throw 'Locked Mode exposed F1 Settings.' }
-    if ((Target-Hashes) -join '|' -ne $before -join '|' -or (Backups).Count) { throw 'Locked F1 invocation changed files.' }
+    if (((Target-Hashes) -join '|') -ne ($before -join '|') -or (Backups).Count) { throw 'Locked F1 invocation changed files.' }
     $password = 'F1 isolated UI test password!'
     Submit-Password $dialog $password $password
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
     Click ([LockNative]::Child($preview,'Cancel'))
     Wait-For { -not [LockNative]::IsWindow($preview) } 'F1 preview cancelled'
-    if ((Target-Hashes) -join '|' -ne $before -join '|' -or (Backups).Count) { throw 'Cancel changed F1 files.' }
+    if (((Target-Hashes) -join '|') -ne ($before -join '|') -or (Backups).Count) { throw 'Cancel changed F1 files.' }
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
     Click ([LockNative]::Child($preview,'Lock Now'))
     Wait-For { -not [LockNative]::IsWindow($preview) } 'Lock Now cancels preview'
     [void][LockNative]::PostMessage($settings,0x111,[IntPtr]118,[IntPtr]::Zero)
-    if ((Target-Hashes) -join '|' -ne $before -join '|' -or (Backups).Count) { throw 'Revoked preview changed files.' }
+    if (((Target-Hashes) -join '|') -ne ($before -join '|') -or (Backups).Count) { throw 'Revoked preview changed files.' }
     [void][LockNative]::Send($tray,0x111,4090,0)
     Submit-Password (Password-Dialog 'Enter Cafe Lock Password') $password
     # An ordinary reader which denies delete/write must refuse without a backup.
@@ -103,7 +103,7 @@ try {
         Click ([LockNative]::Child($preview,'Apply'))
         Result-Dialog 'Refused'
     } finally { $busy.Dispose() }
-    if ((Target-Hashes) -join '|' -ne $before -join '|' -or (Backups).Count) { throw 'Busy target produced writes.' }
+    if (((Target-Hashes) -join '|') -ne ($before -join '|') -or (Backups).Count) { throw 'Busy target produced writes.' }
     Open-Preview
     $preview = Password-Dialog 'ShelfSuite F1 compatibility'
     Click ([LockNative]::Child($preview,'Apply'))
@@ -113,7 +113,7 @@ try {
     $after = Target-Hashes
     Open-Preview
     Result-Dialog 'Already compatible'
-    if ((Target-Hashes) -join '|' -ne $after -join '|' -or (Backups).Count -ne 1) { throw 'Already compatible rewrote files or created a backup.' }
+    if (((Target-Hashes) -join '|') -ne ($after -join '|') -or (Backups).Count -ne 1) { throw 'Already compatible rewrote files or created a backup.' }
     # Only an approved fixture INI is customized for the refusal assertion.
     [IO.File]::AppendAllText((Join-Path $shelf 'Shelf27/Shelf.ini'), "`r`n; unrecognized fixture edit`r`n")
     Open-Preview
